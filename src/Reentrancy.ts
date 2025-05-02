@@ -49,17 +49,18 @@ export namespace Reentrancy {
 			}
 
 			// Found sender contract
-			const found = !fromIsSender && Analyzer.inSameGroup(to, this.sender);
+			const toIsSender = Analyzer.inSameGroup(to, this.sender);
+			const found = !fromIsSender && toIsSender;
 			const newSenderContractDepth = found ? this.currentStack.length : senderContractDepth;
 
 			let before: (() => void) | undefined;
 			let after: (() => void) | undefined;
-			if (!found) {
+			if (!toIsSender) {
 				const counter = senderContractDepth != -1 ? this.afterCount : this.beforeCount;
 				before = () => counter.increment(to.creator);
 				after = () => counter.decrement(to.creator);
 			}
-			else if (senderContractDepth !== -1) {
+			else if (found && senderContractDepth !== -1) {
 				const clone = this.afterCount.clone();
 				before = () => {
 					this.beforeCount.add(clone);
@@ -102,14 +103,15 @@ export namespace Reentrancy {
 	}
 
 	function toTraceList<T extends DebugTrace = DebugTrace>(trace: T, indices: number[]): T[] {
-		const result = new Array<T>(indices.length);
+		const result = new Array<T>(indices.length + 1);
+		result[0] = trace;
 		let current = trace;
 		for (let i = 0; i < indices.length; i++) {
 			const index = indices[i];
 			if (!(current.calls?.length) || index < 0 || index >= current.calls.length)
 				throw new Error(`Invalid index ${index} for call trace`);
 			const next = current.calls[index];
-			current = result[i] = next as T;
+			current = result[i + 1] = next as T;
 		}
 		return result;
 	}
