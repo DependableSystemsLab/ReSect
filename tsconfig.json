@@ -1,0 +1,20 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "NodeNext",
+		"sourceMap": true,
+		"moduleResolution": "nodenext",
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"emitDecoratorMetadata": true,
+		"experimentalDecorators": true,
+		"resolveJsonModule": true,
+		"strict": true,
+		"baseUrl": ".",
+		"outDir": "./dist",
+		"rootDir": "./src"
+	},
+	"include": [
+		"src"
+	]
+}
