@@ -1,8 +1,7 @@
 import { whatsabi, type providers, type AutoloadConfig } from "@shazow/whatsabi";
-import { CallType, Etherscan, type DebugTrace, type DebugTraceProvider } from "./providers/index.js";
-import { Mainnet, Testnet, type ChainName } from "./config/Chain.js";
-import { Counter, hexToString, splitInput, type Hex } from "./utils/index.js";
-
+import { CallType, Etherscan, type DebugTrace, type DebugTraceProvider } from "./providers";
+import { Mainnet, Testnet, type ChainName } from "./config/Chain";
+import { Counter, hexToString, splitInput, type Hex } from "./utils";
 
 export namespace Reentrancy {
 	interface ContractInfo {

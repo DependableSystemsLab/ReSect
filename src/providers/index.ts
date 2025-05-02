@@ -1,3 +1,3 @@
-export * from "./base.js";
-export * from "./Etherscan.js";
-export * from "./Tenderly.js";
+export * from "./base";
+export * from "./Etherscan";
+export * from "./Tenderly";

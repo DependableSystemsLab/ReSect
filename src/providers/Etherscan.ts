@@ -1,6 +1,6 @@
-import { Arrayable } from "type-fest";
-import { toURLSearchParams, verifyAddress, verifyHexNumber, verifyTxHash, type Hex, type QueryObject } from "../utils/index.js";
 import { createThrottledFetch } from "fetch-throttler";
+import { Arrayable } from "type-fest";
+import { toURLSearchParams, verifyAddress, verifyHexNumber, verifyTxHash, type Hex, type QueryObject } from "../utils";
 
 const fetchInstances = new Map<string, typeof fetch>();
 function getFetch(apiKey: string | readonly [key: string, tier: Etherscan.APITier]) {

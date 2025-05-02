@@ -1,5 +1,5 @@
-import { CallType, type CallTrace, type DebugTrace, type Trace } from "../providers/base.js";
-import { type Hex, removeHexPrefix, hexToString } from "./hex.js";
+import { CallType, type CallTrace, type DebugTrace, type Trace } from "../providers/base";
+import { type Hex, removeHexPrefix, hexToString } from "./hex";
 
 export function splitInput(input: Hex): [selector?: string, parameter?: string] {
 	input = removeHexPrefix(hexToString(input));

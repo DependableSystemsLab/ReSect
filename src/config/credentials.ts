@@ -1,5 +1,5 @@
-import { Etherscan } from "../providers/Etherscan.js";
-import type { ChainName } from "./Chain.js";
+import { Etherscan } from "../providers/Etherscan";
+import type { ChainName } from "./Chain";
 
 export const etherscanApiKey = [
 	"REDACTED",

@@ -1,6 +1,6 @@
-import { verifyCallTypes, verifyTxHash, type Hex, type TypeVerifiedDebugTrace } from "../utils/index.js";
-import { ChainName, chainNames } from "../config/Chain.js";
-import type { DebugTraceProvider } from "./base.js";
+import { ChainName, chainNames } from "../config/Chain";
+import { verifyCallTypes, verifyTxHash, type Hex, type TypeVerifiedDebugTrace } from "../utils";
+import type { DebugTraceProvider } from "./base";
 
 const tenderlyNetwork = {
 	Ethereum: "mainnet",
