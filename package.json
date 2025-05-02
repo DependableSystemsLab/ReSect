@@ -12,7 +12,8 @@
 	"author": "true_mogician",
 	"license": "MIT",
 	"dependencies": {
-		"@shazow/whatsabi": "^0.21.0"
+		"@shazow/whatsabi": "^0.21.0",
+		"fetch-throttler": "^1.0.3"
 	},
 	"devDependencies": {
 		"@types/node": "^22.14.1",

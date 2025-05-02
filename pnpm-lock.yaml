@@ -11,6 +11,9 @@ importers:
       '@shazow/whatsabi':
         specifier: ^0.21.0
         version: 0.21.0(@noble/hashes@1.8.0)(typescript@5.8.3)
+      fetch-throttler:
+        specifier: ^1.0.3
+        version: 1.0.3
     devDependencies:
       '@types/node':
         specifier: ^22.14.1
@@ -65,6 +68,9 @@ packages:
 
   eventemitter3@5.0.1:
     resolution: {integrity: sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA==}
+
+  fetch-throttler@1.0.3:
+    resolution: {integrity: sha512-AxeuOU5nEkYDK8xpSedGoqSx/gwbVBBeVknrPsZ6AqpkndRvFLxM5QepPIQ5z1+t+xiYbFTPdj6pSH7ppnuaeA==}
 
   ox@0.6.12:
     resolution: {integrity: sha512-78hziRGLj0qTDa0UW4+ynv9tW2Cp1vmCfGokL8D7kiSDh6Y0LAfHL+HaDN4l2a9jcrOG3fexTDtLNtDNkEwLtg==}
@@ -126,6 +132,8 @@ snapshots:
       typescript: 5.8.3
 
   eventemitter3@5.0.1: {}
+
+  fetch-throttler@1.0.3: {}
 
   ox@0.6.12(typescript@5.8.3):
     dependencies:

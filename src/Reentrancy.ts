@@ -1,7 +1,6 @@
 import { whatsabi, type providers, type AutoloadConfig } from "@shazow/whatsabi";
 import { CallType, Etherscan, type DebugTrace, type DebugTraceProvider } from "./providers/index.js";
 import { Mainnet, Testnet, type ChainName } from "./config/Chain.js";
-import { etherscanApiKey } from "./config/credentials.js";
 import { Counter, hexToString, splitInput, type Hex } from "./utils/index.js";
 
 
@@ -160,6 +159,7 @@ export namespace Reentrancy {
 
 		constructor(
 			readonly chain: ChainName,
+			etherscanApiKey: readonly [key: string, tier: Etherscan.APITier],
 			readonly traceProvider: DebugTraceProvider
 		) {
 			const chainId = chain in Mainnet
@@ -173,7 +173,7 @@ export namespace Reentrancy {
 					call: ({ to, data }) => this.etherscan.geth.call(to, data),
 					getAddress: () => { throw new Error("Not implemented"); },
 				} satisfies providers.Provider,
-				abiLoader: new whatsabi.loaders.EtherscanV2ABILoader({ apiKey: etherscanApiKey, chainId })
+				abiLoader: new whatsabi.loaders.EtherscanV2ABILoader({ apiKey: etherscanApiKey[0], chainId })
 			};
 			this.autoload = (address: string) => whatsabi.autoload(address, whatsabiConfig);
 		}

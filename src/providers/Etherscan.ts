@@ -1,14 +1,38 @@
 import { Arrayable } from "type-fest";
 import { toURLSearchParams, verifyAddress, verifyHexNumber, verifyTxHash, type Hex, type QueryObject } from "../utils/index.js";
+import { createThrottledFetch } from "fetch-throttler";
+
+const fetchInstances = new Map<string, typeof fetch>();
+function getFetch(apiKey: string | readonly [key: string, tier: Etherscan.APITier]) {
+	const [key, tier = Etherscan.APITier.Free] = typeof apiKey == "string" ? [apiKey] : apiKey;
+	let fetchInst = fetchInstances.get(key);
+	if (!fetchInst) {
+		const rateLimit = Etherscan.rateLimits[tier][0];
+		fetchInst = createThrottledFetch({
+			interval: 1000,
+			maxConcurrency: rateLimit
+		});
+		fetchInstances.set(key, fetchInst);
+	}
+	return [key, fetchInst] as const;
+}
 
 export class Etherscan {
 	static readonly BASE_URL = "https://api.etherscan.io/v2/api";
 
+	private _reqId = 0;
 	private _chainId: number = 1;
+	private _fetch: typeof fetch;
+
+	readonly apiKey: string;
 	readonly geth: Etherscan.Geth;
 
-	constructor(public readonly apiKey: string, chainId: number = 1) {
+	constructor(
+		apiKey: string | readonly [key: string, tier: Etherscan.APITier],
+		chainId: number = 1
+	) {
 		this._chainId = chainId;
+		[this.apiKey, this._fetch] = getFetch(apiKey);
 		this.geth = new Etherscan.Geth(apiKey, chainId);
 	}
 
@@ -48,7 +72,7 @@ export class Etherscan {
 		});
 		const url = new URL(Etherscan.BASE_URL);
 		url.search = searchParams.toString();
-		const response = await fetch(url.href, {
+		const response = await this._fetch(url.href, {
 			method: "GET",
 			headers: {
 				"Accept": "application/json"
@@ -58,7 +82,7 @@ export class Etherscan {
 		if (!response.ok)
 			throw new Error(`Etherscan API error: ${response.status} ${response.statusText}`);
 		if (resp.status !== "1")
-			throw new Error(`Etherscan API error: ${resp.status} ${resp.message}`);
+			throw new Error(`Etherscan API error: ${resp.status} ${resp.message} ${resp.result}`);
 		return resp.result;
 	}
 
@@ -116,13 +140,12 @@ export class Etherscan {
 			contractAddresses = [contractAddresses];
 		if (contractAddresses.length <= 5)
 			return await this.request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses });
-		const results: Etherscan.ContractCreation[] = [];
-		for (let i = 0; i < contractAddresses.length; i += 5) {
-			const slice = contractAddresses.slice(i, i + 5);
-			const result = await this.request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses: slice });
-			results.push(...result);
-		}
-		return results;
+		const slices = new Array(Math.ceil(contractAddresses.length / 5));
+		for (let i = 0; i < contractAddresses.length; i += 5)
+			slices[i / 5] = contractAddresses.slice(i, i + 5);
+		return await Promise.all(
+			slices.map(slice => this.request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses: slice }))
+		).then(results => results.flat());
 	}
 
 	getLogs(address: Hex, topics?: string[], topicOpr?: "and" | "or", blockRange?: Etherscan.BlockRange, pagination?: Etherscan.Pagination, chain?: number): Promise<any[]>;
@@ -160,6 +183,22 @@ export class Etherscan {
 }
 
 export namespace Etherscan {
+	export enum APITier {
+		Free,
+		Standard,
+		Advanced,
+		Professional,
+		ProPlus
+	}
+
+	export const rateLimits: Record<Etherscan.APITier, [perSecond: number, perDay: number]> = {
+		[Etherscan.APITier.Free]: [5, 100_000],
+		[Etherscan.APITier.Standard]: [10, 200_000],
+		[Etherscan.APITier.Advanced]: [20, 500_000],
+		[Etherscan.APITier.Professional]: [30, 1_000_000],
+		[Etherscan.APITier.ProPlus]: [30, 1_500_000]
+	};
+
 	export type BlockRange = [startBlock?: number, endBlock?: number] | "all";
 	export type Pagination = [page?: number, offset?: number] | "all";
 	export type Topics = [topic0: string, topic1?: string, topic2?: string, topic3?: string];
@@ -225,10 +264,15 @@ export namespace Etherscan {
 
 export namespace Etherscan {
 	export class Geth {
+		private _fetch: typeof fetch;
+		readonly apiKey: string;
+
 		constructor(
-			public readonly apiKey: string,
+			apiKey: string | readonly [key: string, tier: Etherscan.APITier],
 			public chainId: number = 1
-		) { }
+		) {
+			[this.apiKey, this._fetch] = getFetch(apiKey);
+		}
 
 		private async request<T>(
 			action: string,
@@ -245,7 +289,7 @@ export namespace Etherscan {
 			});
 			const url = new URL(Etherscan.BASE_URL);
 			url.search = searchParams.toString();
-			const response = await fetch(url.href, {
+			const response = await this._fetch(url.href, {
 				method: "GET",
 				headers: {
 					"Accept": "application/json"
