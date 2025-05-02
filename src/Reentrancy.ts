@@ -147,8 +147,8 @@ export namespace Reentrancy {
 		readonly: boolean;
 		scope: Scope;
 		entryPoint: EntryPoint;
-		attackers: string[];
-		victims: string[];
+		attackers: AddressInfo[];
+		victims: AddressInfo[];
 		trace: AnnotatedTrace;
 		stack: number[];
 	}
@@ -263,30 +263,31 @@ export namespace Reentrancy {
 			return result;
 		}
 
-		async *analyze(txHash: Hex): AsyncGenerator<AnalysisResult | false> {
+		async *analyze(txHash: Hex): AsyncGenerator<AnalysisResult> {
 			const rawTrace = await this.traceProvider.debugTraceTransaction(hexToString(txHash));
 			const callTrace = Analyzer.toAnnotatedTrace(rawTrace);
 			const infos = await this.getAddressInfos(callTrace);
 			const sender = callTrace.from;
 			const senderInfo = infos.get(sender)!;
 			const senderAddresses = Array.from(infos.values())
-				.filter(info => info.address !== sender && Analyzer.inSameGroup(senderInfo, info));
-			if (senderAddresses.length === 0) {
-				yield false;
+				.filter(info => Analyzer.inSameGroup(senderInfo, info));
+			if (senderAddresses.length <= 1)
 				return;
-			}
-			let reentrancyDetected = false;
 			const traverser = new Traverser(infos);
 			for (const stack of traverser.traverse(callTrace)) {
-				reentrancyDetected = true;
 				const result = {
 					stack,
-					trace: callTrace
+					trace: callTrace,
+					attackers: senderAddresses
 				} as AnalysisResult;
+
 				const traces = toTraceList(callTrace, stack);
 				const lastTrace = traces[traces.length - 1];
 				lastTrace.label = Label.VictimIn;
 				const victimInfo = infos.get(lastTrace.to)!;
+				result.victims = Array.from(infos.values())
+					.filter(info => Analyzer.inSameGroup(victimInfo, info));
+
 				let searchTargetIsAttacker = true;
 				let lastCurrentPartyTrace = lastTrace;
 				for (let i = traces.length - 2; i >= 0; i--) {
@@ -310,6 +311,7 @@ export namespace Reentrancy {
 						lastCurrentPartyTrace = trace;
 					}
 				}
+
 				result.scope = Scope.CrossContract;
 				let victimOutIdx = -1;
 				for (let i = 0; i < traces.length; i++) {
@@ -327,11 +329,8 @@ export namespace Reentrancy {
 						victimOutIdx = -1;
 					}
 				}
+
 				yield result;
-			}
-			if (!reentrancyDetected) {
-				yield false;
-				return;
 			}
 		}
 	}
