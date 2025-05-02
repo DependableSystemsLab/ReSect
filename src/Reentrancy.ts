@@ -1,8 +1,8 @@
 import { whatsabi, type providers, type AutoloadConfig } from "@shazow/whatsabi";
-import { Etherscan, Tenderly } from "./providers/index.js";
+import { CallType, Etherscan, type DebugTrace, type DebugTraceProvider } from "./providers/index.js";
 import { Mainnet, Testnet, type ChainName } from "./config/Chain.js";
-import * as creds from "./config/credentials.js";
-import { Counter, parseInput, CallType, type Hex } from "./utils/index.js";
+import { etherscanApiKey } from "./config/credentials.js";
+import { Counter, hexToString, splitInput, type Hex } from "./utils/index.js";
 
 
 export namespace Reentrancy {
@@ -24,13 +24,6 @@ export namespace Reentrancy {
 
 	type AddressInfo = ContractInfo | EOAInfo;
 
-	interface MinimalTrace {
-		from: string;
-		to: string;
-		type: CallType;
-		calls?: MinimalTrace[];
-	}
-
 	class Traverser {
 		private readonly beforeCount = new Counter();
 		private readonly afterCount = new Counter();
@@ -39,7 +32,7 @@ export namespace Reentrancy {
 
 		constructor(public readonly infos: Map<string, AddressInfo>) { }
 
-		private *_traverse(trace: MinimalTrace, senderContractDepth: number): Generator<number[]> {
+		private *_traverse(trace: DebugTrace, senderContractDepth: number): Generator<number[]> {
 			const to = this.infos.get(trace.to)!;
 			if (!to.isContract)
 				return;
@@ -102,14 +95,14 @@ export namespace Reentrancy {
 			this.sender = undefined!;
 		}
 
-		*traverse(callTrace: MinimalTrace): Generator<number[]> {
+		*traverse(callTrace: DebugTrace): Generator<number[]> {
 			this._clear();
 			this.sender = this.infos.get(callTrace.from)! as EOAInfo;
 			yield* this._traverse(callTrace, -1);
 		}
 	}
 
-	function toTraceList<T extends MinimalTrace = MinimalTrace>(trace: T, indices: number[]): T[] {
+	function toTraceList<T extends DebugTrace = DebugTrace>(trace: T, indices: number[]): T[] {
 		const result = new Array<T>(indices.length);
 		let current = trace;
 		for (let i = 0; i < indices.length; i++) {
@@ -143,15 +136,14 @@ export namespace Reentrancy {
 		VictimIn = 1 << 3
 	}
 
-	export type AnnotatedTrace = Omit<MinimalTrace, "calls"> & {
+	export type AnnotatedTrace = Omit<DebugTrace, "calls"> & {
 		selector?: string;
 		parameter?: string;
 		label?: Label;
 		calls?: AnnotatedTrace[];
 	};
 
-	export interface Characteristics {
-		isReentrancy: true;
+	export interface AnalysisResult {
 		readonly: boolean;
 		scope: Scope;
 		entryPoint: EntryPoint;
@@ -161,25 +153,19 @@ export namespace Reentrancy {
 		stack: number[];
 	}
 
-	export type AnalysisResult = {
-		isReentrancy: false;
-	} | Characteristics;
-
 	export class Analyzer {
 		private readonly _codeCache = new Map<string, string>();
 		readonly etherscan: Etherscan;
-		readonly tenderly: Tenderly;
 		readonly autoload: (address: string) => Promise<whatsabi.AutoloadResult>;
 
-		constructor(readonly chain: ChainName) {
+		constructor(
+			readonly chain: ChainName,
+			readonly traceProvider: DebugTraceProvider
+		) {
 			const chainId = chain in Mainnet
 				? Mainnet[chain as keyof typeof Mainnet]
 				: Testnet[chain as keyof typeof Testnet];
-			this.etherscan = new Etherscan(creds.etherscanApiKey, chainId);
-			if (!(chain in creds.tenderlyNodeAccessKeys))
-				throw new Error(`No Tenderly access key for ${chain}`);
-			// @ts-expect-error
-			this.tenderly = new Tenderly(chainId, creds.tenderlyNodeAccessKeys[chain]);
+			this.etherscan = new Etherscan(etherscanApiKey, chainId);
 			const whatsabiConfig: AutoloadConfig = {
 				provider: {
 					getCode: address => this.getCode(address),
@@ -187,12 +173,12 @@ export namespace Reentrancy {
 					call: ({ to, data }) => this.etherscan.geth.call(to, data),
 					getAddress: () => { throw new Error("Not implemented"); },
 				} satisfies providers.Provider,
-				abiLoader: new whatsabi.loaders.EtherscanV2ABILoader({ apiKey: creds.etherscanApiKey, chainId })
+				abiLoader: new whatsabi.loaders.EtherscanV2ABILoader({ apiKey: etherscanApiKey, chainId })
 			};
 			this.autoload = (address: string) => whatsabi.autoload(address, whatsabiConfig);
 		}
 
-		private static _getAllAddresses(callTrace: MinimalTrace, set: Set<string>) {
+		private static _getAllAddresses(callTrace: DebugTrace, set: Set<string>) {
 			set.add(callTrace.from);
 			set.add(callTrace.to);
 			if (callTrace.calls?.length) {
@@ -201,14 +187,14 @@ export namespace Reentrancy {
 			}
 		}
 
-		static getAllAddresses(callTrace: MinimalTrace): Set<string> {
+		static getAllAddresses(callTrace: DebugTrace): Set<string> {
 			const set = new Set<string>();
 			this._getAllAddresses(callTrace, set);
 			return set;
 		}
 
-		static toAnnotatedTrace(trace: Tenderly.DebugCallTrace): AnnotatedTrace {
-			const [selector, parameter] = parseInput(trace.input);
+		static toAnnotatedTrace(trace: DebugTrace): AnnotatedTrace {
+			const [selector, parameter] = splitInput(trace.input ?? "0x");
 			const result: AnnotatedTrace = {
 				from: trace.from,
 				to: trace.to,
@@ -237,7 +223,7 @@ export namespace Reentrancy {
 			return code;
 		}
 
-		async getAddressInfos(callTrace: MinimalTrace): Promise<Map<string, AddressInfo>> {
+		async getAddressInfos(callTrace: DebugTrace): Promise<Map<string, AddressInfo>> {
 			const result = new Map<string, AddressInfo>();
 			const addresses = Analyzer.getAllAddresses(callTrace);
 			result.set(callTrace.from, { address: callTrace.from, isContract: false });
@@ -267,27 +253,33 @@ export namespace Reentrancy {
 			return result;
 		}
 
-		async analyze(txHash: Hex): Promise<AnalysisResult> {
-			const rawTrace = await this.tenderly.debugTraceTransaction(txHash);
+		async *analyze(txHash: Hex): AsyncGenerator<AnalysisResult | false> {
+			const rawTrace = await this.traceProvider.debugTraceTransaction(hexToString(txHash));
 			const callTrace = Analyzer.toAnnotatedTrace(rawTrace);
 			const infos = await this.getAddressInfos(callTrace);
 			const sender = callTrace.from;
 			const senderInfo = infos.get(sender)!;
 			const senderAddresses = Array.from(infos.values())
 				.filter(info => info.address !== sender && Analyzer.inSameGroup(senderInfo, info));
-			if (senderAddresses.length === 0)
-				return { isReentrancy: false };
-			const traverser = new Traverser(infos);
-			const result = {
-				isReentrancy: true,
-				trace: callTrace
-			} as Characteristics;
-			for (const stack of traverser.traverse(callTrace)) {
-				result.stack = stack;
-				const traces = toTraceList(callTrace, stack);
-				return result;
+			if (senderAddresses.length === 0) {
+				yield false;
+				return;
 			}
-			return { isReentrancy: false };
+			let reentrancyDetected = false;
+			const traverser = new Traverser(infos);
+			for (const stack of traverser.traverse(callTrace)) {
+				reentrancyDetected = true;
+				const result = {
+					stack,
+					trace: callTrace
+				} as AnalysisResult;
+				const traces = toTraceList(callTrace, stack);
+				yield result;
+			}
+			if (!reentrancyDetected) {
+				yield false;
+				return;
+			}
 		}
 	}
 }

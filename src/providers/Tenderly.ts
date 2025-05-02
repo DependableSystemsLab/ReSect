@@ -1,5 +1,6 @@
-import { verifyTxHash, CallType, type Hex } from "../utils/index.js";
+import { verifyCallTypes, verifyTxHash, type Hex, type TypeVerifiedDebugTrace } from "../utils/index.js";
 import { ChainName, chainNames } from "../config/Chain.js";
+import type { DebugTraceProvider } from "./base.js";
 
 const tenderlyNetwork = {
 	Ethereum: "mainnet",
@@ -26,7 +27,7 @@ const tenderlyNetwork = {
 	zkSyncSepolia: "zksync-sepolia"
 } satisfies Partial<Record<ChainName, string>>;
 
-export class Tenderly {
+export class Tenderly implements DebugTraceProvider<Tenderly.DebugTrace> {
 	private static _rpcId = 0;
 	private _chain!: Tenderly.SupportedNetwork;
 	private _accessKey!: string;
@@ -75,17 +76,22 @@ export class Tenderly {
 			const text = await result.text();
 			throw new Error(`Tenderly API error: ${text}`);
 		}
-		const json = await result.json() as Tenderly.RpcResponse<T>;
+		const json = await result.json() as Tenderly.RpcResponse<T> | Tenderly.RpcError;
+		if ("error" in json) {
+			const error = json.error;
+			throw new Error(`Tenderly API error: ${error.message} (${error.slug})`);
+		}
 		return json.result;
 	}
 
-	debugTraceTransaction(
+	async debugTraceTransaction(
 		txHash: Hex,
 		tracer: "callTracer" | "prestateTracer" = "callTracer",
 		onlyTopCall = false
-	): Promise<Tenderly.DebugCallTrace> {
+	): Promise<Tenderly.DebugTrace> {
 		txHash = verifyTxHash(txHash);
-		return this.request("debug_traceTransaction", [txHash, { tracer, onlyTopCall }]);
+		const trace = await this.request<Tenderly.DebugTraceRaw>("debug_traceTransaction", [txHash, { tracer, onlyTopCall }]);
+		return verifyCallTypes(trace);
 	}
 }
 
@@ -103,8 +109,16 @@ export namespace Tenderly {
 		result: T;
 	}
 
-	export interface DebugCallTrace {
-		type: CallType;
+	export interface RpcError {
+		error: {
+			id: string;
+			slug: string;
+			message: string;
+		}
+	}
+
+	export interface DebugTraceRaw {
+		type: string;
 		from: string;
 		to: string;
 		value: string;
@@ -112,6 +126,8 @@ export namespace Tenderly {
 		gasUsed: string;
 		input: string;
 		output: string;
-		calls?: DebugCallTrace[];
-	}
+		calls?: DebugTraceRaw[];
+	};
+
+	export type DebugTrace = TypeVerifiedDebugTrace<DebugTraceRaw>;
 }
