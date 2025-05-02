@@ -4,8 +4,8 @@
 	"description": "Analyze characteristics of reentrancy transactions.",
 	"private": true,
 	"scripts": {
-		"build": "tsc -b",
-		"start": "node dist/main.js"
+		"build": "tsc -b tsconfig.build.json",
+		"test": "jest"
 	},
 	"author": "true_mogician",
 	"license": "MIT",
@@ -14,7 +14,11 @@
 		"fetch-throttler": "^1.0.3"
 	},
 	"devDependencies": {
+		"@types/jest": "^29.5.14",
 		"@types/node": "^22.14.1",
+		"jest": "^29.7.0",
+		"ts-jest": "^29.3.2",
+		"ts-node": "^10.9.2",
 		"type-fest": "^4.40.1",
 		"typescript": "^5.8.3"
 	}
