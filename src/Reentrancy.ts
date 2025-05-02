@@ -154,6 +154,15 @@ export namespace Reentrancy {
 		stack: number[];
 	}
 
+	function hasLabel(trace: AnnotatedTrace, label: Label): boolean {
+		if (trace.label === undefined)
+			return false;
+		return (trace.label & label) !== 0;
+	}
+	function setLabel(trace: AnnotatedTrace, label: Label) {
+		trace.label = (trace.label ?? Label.None) | label;
+	}
+
 	export class Analyzer {
 		private readonly _codeCache = new Map<string, string>();
 		readonly etherscan: Etherscan;
@@ -276,6 +285,49 @@ export namespace Reentrancy {
 					trace: callTrace
 				} as AnalysisResult;
 				const traces = toTraceList(callTrace, stack);
+				const lastTrace = traces[traces.length - 1];
+				lastTrace.label = Label.VictimIn;
+				const victimInfo = infos.get(lastTrace.to)!;
+				let searchTargetIsAttacker = true;
+				let lastCurrentPartyTrace = lastTrace;
+				for (let i = traces.length - 2; i >= 0; i--) {
+					const trace = traces[i];
+					const next = traces[i + 1];
+					const to = infos.get(trace.to)! as ContractInfo;
+					if (Analyzer.inSameGroup(to, senderInfo)) {
+						if (searchTargetIsAttacker) {
+							setLabel(next, Label.AttackerOut);
+							setLabel(lastCurrentPartyTrace, Label.VictimIn);
+							searchTargetIsAttacker = false;
+						}
+						lastCurrentPartyTrace = trace;
+					}
+					else if (Analyzer.inSameGroup(to, victimInfo)) {
+						if (!searchTargetIsAttacker) {
+							setLabel(next, Label.VictimOut);
+							setLabel(lastCurrentPartyTrace, Label.AttackerIn);
+							searchTargetIsAttacker = true;
+						}
+						lastCurrentPartyTrace = trace;
+					}
+				}
+				result.scope = Scope.CrossContract;
+				let victimOutIdx = -1;
+				for (let i = 0; i < traces.length; i++) {
+					const trace = traces[i];
+					if (victimOutIdx === -1) {
+						if (hasLabel(trace, Label.VictimOut))
+							victimOutIdx = i;
+					}
+					else if (hasLabel(trace, Label.VictimIn)) {
+						const targetTrace = traces[victimOutIdx - 1];
+						const scope = trace.to !== targetTrace.to ? Scope.CrossContract
+							: trace.selector !== targetTrace.selector ? Scope.CrossFunction : Scope.SingleFunction;
+						if (scope < result.scope)
+							result.scope = scope;
+						victimOutIdx = -1;
+					}
+				}
 				yield result;
 			}
 			if (!reentrancyDetected) {
