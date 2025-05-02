@@ -1,0 +1,35 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "pnpm: build",
+			"type": "shell",
+			"command": "pnpm",
+			"args": [
+				"run",
+				"build"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": [],
+			"detail": "pnpm run build"
+		},
+		{
+			"label": "pnpm: start",
+			"type": "shell",
+			"command": "pnpm",
+			"args": [
+				"run",
+				"start"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": [],
+			"detail": "pnpm run start"
+		}
+	]
+}
