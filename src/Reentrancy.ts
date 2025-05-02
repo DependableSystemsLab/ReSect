@@ -333,5 +333,21 @@ export namespace Reentrancy {
 				yield result;
 			}
 		}
+
+		static toString(result: AnalysisResult): string {
+			let str = "\n";
+			str += `Readonly: ${result.readonly}\n`;
+			str += `Scope: ${result.scope}\n`;
+			str += `Entry Point: ${result.entryPoint}\n`;
+			str += `Stack: ${result.stack}\n`;
+			str += "Attackers:\n";
+			for (const addr of result.attackers)
+				str += `\t[${addr.isContract ? "Contract" : "EOA"}] ${addr.address}\n`;
+			str += "Victims:\n";
+			for (const addr of result.victims)
+				str += `\t[${addr.isContract ? "Contract" : "EOA"}] ${addr.address}\n`;
+			str += "\n";
+			return str;
+		}
 	}
 }
