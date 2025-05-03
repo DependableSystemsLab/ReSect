@@ -16,6 +16,12 @@ export interface MinimalTrace {
 	output?: string;
 }
 
+export interface Trace extends MinimalTrace {
+	value: string;
+	gas: string;
+	gasUsed: string;
+}
+
 export type CallTrace<T extends MinimalTrace = MinimalTrace> = T & {
 	traceAddress: number[];
 }
