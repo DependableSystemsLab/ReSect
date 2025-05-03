@@ -8,7 +8,7 @@ export enum CallType {
 	SELFDESTRUCT = "SELFDESTRUCT"
 }
 
-export interface Trace {
+export interface MinimalTrace {
 	from: string;
 	to: string;
 	type: CallType;
@@ -16,19 +16,19 @@ export interface Trace {
 	output?: string;
 }
 
-export type CallTrace<T extends Trace = Trace> = T & {
+export type CallTrace<T extends MinimalTrace = MinimalTrace> = T & {
 	traceAddress: number[];
 }
 
-export type DebugTrace<T extends Trace = Trace> = T & {
+export type DebugTrace<T extends MinimalTrace = MinimalTrace> = T & {
 	calls?: DebugTrace<T>[];
 }
 
-export interface TraceProvider<T extends Trace = Trace> {
+export interface TraceProvider<T extends MinimalTrace = MinimalTrace> {
 	traceTransaction(txHash: string): Promise<CallTrace<T>[]>;
 }
 
-export interface DebugTraceProvider<T extends Trace = Trace> {
+export interface DebugTraceProvider<T extends MinimalTrace = MinimalTrace> {
 	debugTraceTransaction(txHash: string): Promise<DebugTrace<T>>;
 }
 

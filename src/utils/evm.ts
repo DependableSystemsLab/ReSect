@@ -1,4 +1,4 @@
-import { CallType, type CallTrace, type DebugTrace, type Trace } from "../providers/base";
+import { CallType, type CallTrace, type DebugTrace, type MinimalTrace } from "../providers/base";
 import { Hex } from "./hex";
 
 export function splitInput(input: Hex | undefined): [selector?: string, parameter?: string] {
@@ -71,7 +71,7 @@ function verifyAdjacentTraceAddress(a: number[], b: number[]): boolean {
 	return a.length === b.length - 1 && b[b.length - 1] === 0;
 }
 
-export function callTraceToDebugTrace<T extends Trace = Trace>(
+export function callTraceToDebugTrace<T extends MinimalTrace = MinimalTrace>(
 	callTraces: CallTrace<T>[],
 	verify: boolean = true,
 	sort: boolean = false
