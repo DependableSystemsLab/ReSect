@@ -11,7 +11,18 @@ function getFetch(apiKey: string | readonly [key: string, tier: Etherscan.APITie
 		const rateLimit = Etherscan.rateLimits[tier][0];
 		fetchInst = createThrottledFetch({
 			interval: 1000,
-			maxConcurrency: rateLimit
+			maxConcurrency: rateLimit,
+			maxRetry: 2,
+			shouldRetry(res) {
+				if (!(res instanceof Response) || !res.ok)
+					return;
+				return res.clone().json().then(json => {
+					if (json.error != undefined)
+						return true;
+					if ("status" in json && json.status !== "1")
+						return true;
+				});
+			}
 		});
 		fetchInstances.set(key, fetchInst);
 	}
@@ -21,7 +32,6 @@ function getFetch(apiKey: string | readonly [key: string, tier: Etherscan.APITie
 export class Etherscan {
 	static readonly BASE_URL = "https://api.etherscan.io/v2/api";
 
-	private _reqId = 0;
 	private _chainId: number = 1;
 	private _fetch: typeof fetch;
 
@@ -204,7 +214,7 @@ export namespace Etherscan {
 	export type Pagination = [page?: number, offset?: number] | "all";
 	export type Topics = [topic0: string, topic1?: string, topic2?: string, topic3?: string];
 
-	export interface Response<T> {
+	export interface Response<T = any> {
 		status: string;
 		message: string;
 		result: T;

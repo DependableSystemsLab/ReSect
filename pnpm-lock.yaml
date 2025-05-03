@@ -12,8 +12,8 @@ importers:
         specifier: ^0.21.0
         version: 0.21.0(@noble/hashes@1.8.0)(typescript@5.8.3)
       fetch-throttler:
-        specifier: ^1.0.3
-        version: 1.0.3
+        specifier: ^1.1.0
+        version: 1.1.0
     devDependencies:
       '@types/jest':
         specifier: ^29.5.14
@@ -641,8 +641,8 @@ packages:
   fb-watchman@2.0.2:
     resolution: {integrity: sha512-p5161BqbuCaSnB8jIbzQHOlpgsPmK5rJVDfDKO91Axs5NC1uu3HRQm6wt9cd9/+GtQQIO53JdGXXoyDpTAsgYA==}
 
-  fetch-throttler@1.0.3:
-    resolution: {integrity: sha512-AxeuOU5nEkYDK8xpSedGoqSx/gwbVBBeVknrPsZ6AqpkndRvFLxM5QepPIQ5z1+t+xiYbFTPdj6pSH7ppnuaeA==}
+  fetch-throttler@1.1.0:
+    resolution: {integrity: sha512-RYIBZ5CuuRuZN4iH8parSBDOghz6KXPyplf+cjhYWTR5RktB+cqFYRqhTVm8InX84WGFteD9XDNisqmsZldBBA==}
 
   filelist@1.0.4:
     resolution: {integrity: sha512-w1cEuf3S+DrLCQL7ET6kz+gmlJdbq9J7yXCSjK/OZCPA+qEN1WyF4ZAf0YYJa4/shHJra2t/d/r8SV4Ji+x+8Q==}
@@ -2037,7 +2037,7 @@ snapshots:
     dependencies:
       bser: 2.1.1
 
-  fetch-throttler@1.0.3: {}
+  fetch-throttler@1.1.0: {}
 
   filelist@1.0.4:
     dependencies:
