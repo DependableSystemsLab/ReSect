@@ -5,6 +5,7 @@ const config: Config = {
 	testEnvironment: "node",
 	collectCoverage: true,
 	coverageDirectory: "coverage",
+	setupFiles: ["<rootDir>/test/setup.ts"],
 	transform: {
 		"^.+\\.tsx?$": ["ts-jest", { tsconfig: "tsconfig.test.json" }]
 	}
