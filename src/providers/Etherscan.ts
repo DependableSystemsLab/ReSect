@@ -33,8 +33,8 @@ function getFetch(apiKey: string | readonly [key: string, tier: Etherscan.APITie
 export class Etherscan {
 	static readonly BASE_URL = "https://api.etherscan.io/v2/api";
 
-	private _chainId: number = 1;
-	private _fetch: typeof fetch;
+	#chainId: number = 1;
+	#fetch: typeof fetch;
 
 	readonly apiKey: string;
 	readonly geth: Etherscan.Geth;
@@ -43,20 +43,20 @@ export class Etherscan {
 		apiKey: string | readonly [key: string, tier: Etherscan.APITier],
 		chainId: number = 1
 	) {
-		this._chainId = chainId;
-		[this.apiKey, this._fetch] = getFetch(apiKey);
+		this.#chainId = chainId;
+		[this.apiKey, this.#fetch] = getFetch(apiKey);
 		this.geth = new Etherscan.Geth(apiKey, chainId);
 	}
 
 	get chainId() {
-		return this._chainId;
+		return this.#chainId;
 	}
 	set chainId(chainId: number) {
-		this._chainId = chainId;
+		this.#chainId = chainId;
 		this.geth.chainId = chainId;
 	}
 
-	private static setBlockRange(
+	static #setBlockRange(
 		params: Record<string, any>,
 		range: Etherscan.BlockRange,
 		paramNames: [start: string, end: string] = ["startblock", "endblock"]
@@ -68,7 +68,7 @@ export class Etherscan {
 			params[paramNames[1]] = end;
 	}
 
-	private async request<T>(
+	async #request<T>(
 		module: string,
 		action: string,
 		chain?: number,
@@ -84,7 +84,7 @@ export class Etherscan {
 		});
 		const url = new URL(Etherscan.BASE_URL);
 		url.search = searchParams.toString();
-		const response = await this._fetch(url.href, {
+		const response = await this.#fetch(url.href, {
 			method: "GET",
 			headers: {
 				"Accept": "application/json"
@@ -98,7 +98,7 @@ export class Etherscan {
 		return resp.result;
 	}
 
-	private async requestWithPagination<T extends unknown[]>(
+	async #requestWithPagination<T extends unknown[]>(
 		module: string,
 		action: string,
 		chain?: number,
@@ -110,17 +110,17 @@ export class Etherscan {
 			delete params.offset;
 		}
 		if (pagination == undefined)
-			return this.request<T>(module, action, chain, params);
+			return this.#request<T>(module, action, chain, params);
 		if (Array.isArray(pagination)) {
 			let [page, offset] = pagination;
 			page ??= 1;
 			offset ??= 1000;
-			return this.request<T>(module, action, chain, { ...params, page, offset });
+			return this.#request<T>(module, action, chain, { ...params, page, offset });
 		}
 		let curPage = 1;
-		const result = await this.request<T>(module, action, chain, { ...params, page: 1, offset: 1000 });
+		const result = await this.#request<T>(module, action, chain, { ...params, page: 1, offset: 1000 });
 		while (result.length == 1000 * curPage) {
-			const next = await this.request<T>(module, action, chain, { ...params, page: ++curPage, offset: 1000 });
+			const next = await this.#request<T>(module, action, chain, { ...params, page: ++curPage, offset: 1000 });
 			result.push(...next);
 		}
 		return result;
@@ -130,7 +130,7 @@ export class Etherscan {
 		timestamp ??= Math.floor(Date.now() / 1000);
 		if (timestamp < 0)
 			throw new Error(`Invalid timestamp: ${timestamp}`);
-		return this.request<number>("block", "getblocknobytime", chain, { timestamp, closest });
+		return this.#request<number>("block", "getblocknobytime", chain, { timestamp, closest });
 	}
 
 	getTransactionsByAddress(
@@ -141,8 +141,8 @@ export class Etherscan {
 	): Promise<Etherscan.TransactionByAddress[]> {
 		address = Hex.verifyAddress(address);
 		const params = { address, sort: "asc" };
-		Etherscan.setBlockRange(params, blockRange);
-		return this.requestWithPagination<Etherscan.TransactionByAddress[]>(
+		Etherscan.#setBlockRange(params, blockRange);
+		return this.#requestWithPagination<Etherscan.TransactionByAddress[]>(
 			"account", "txlist", chain, params, pagination
 		);
 	}
@@ -151,12 +151,12 @@ export class Etherscan {
 		if (!Array.isArray(contractAddresses))
 			contractAddresses = [contractAddresses];
 		if (contractAddresses.length <= 5)
-			return await this.request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses });
+			return await this.#request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses });
 		const slices = new Array(Math.ceil(contractAddresses.length / 5));
 		for (let i = 0; i < contractAddresses.length; i += 5)
 			slices[i / 5] = contractAddresses.slice(i, i + 5);
 		return await slices.mapAsync(
-			slice => this.request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses: slice })
+			slice => this.#request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses: slice })
 		).then(results => results.flat());
 	}
 
@@ -187,8 +187,8 @@ export class Etherscan {
 					params[`topic${i - 1}_${i}_opr`] = topicOpr;
 			}
 		}
-		Etherscan.setBlockRange(params, blockRange, ["fromBlock", "toBlock"]);
-		return this.requestWithPagination<Etherscan.Log[]>(
+		Etherscan.#setBlockRange(params, blockRange, ["fromBlock", "toBlock"]);
+		return this.#requestWithPagination<Etherscan.Log[]>(
 			"logs", "getLogs", chain, params, pagination
 		);
 	}

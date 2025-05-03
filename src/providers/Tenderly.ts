@@ -59,7 +59,7 @@ export class Tenderly implements DebugTraceProvider<Tenderly.DebugTrace> {
 		return `https://${tenderlyNetwork[this._chain]}.gateway.tenderly.co/${this._accessKey}`;
 	}
 
-	private async request<T>(method: string, params: unknown[]): Promise<T> {
+	async #request<T>(method: string, params: unknown[]): Promise<T> {
 		const result = await fetch(this.rpcUrl, {
 			method: "POST",
 			headers: {
@@ -90,7 +90,7 @@ export class Tenderly implements DebugTraceProvider<Tenderly.DebugTrace> {
 		onlyTopCall = false
 	): Promise<Tenderly.DebugTrace> {
 		txHash = Hex.verifyTxHash(txHash);
-		const trace = await this.request<Tenderly.DebugTraceRaw>("debug_traceTransaction", [txHash, { tracer, onlyTopCall }]);
+		const trace = await this.#request<Tenderly.DebugTraceRaw>("debug_traceTransaction", [txHash, { tracer, onlyTopCall }]);
 		return verifyCallTypes(trace);
 	}
 }

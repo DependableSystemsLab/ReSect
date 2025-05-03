@@ -31,7 +31,7 @@ export namespace Reentrancy {
 
 		constructor(public readonly infos: Map<string, AddressInfo>) { }
 
-		private *_traverse(trace: DebugTrace, senderContractDepth: number): Generator<number[]> {
+		*#traverse(trace: DebugTrace, senderContractDepth: number): Generator<number[]> {
 			const to = this.infos.get(trace.to)!;
 			if (!to.isContract)
 				return;
@@ -76,7 +76,7 @@ export namespace Reentrancy {
 			let reentrancyDetectedInCalls = false;
 			for (let i = 0; i < trace.calls.length; i++) {
 				this.currentStack.push(i);
-				for (const stack of this._traverse(trace.calls[i], newSenderContractDepth)) {
+				for (const stack of this.#traverse(trace.calls[i], newSenderContractDepth)) {
 					reentrancyDetectedInCalls = true;
 					yield stack;
 				}
@@ -88,7 +88,7 @@ export namespace Reentrancy {
 				yield this.currentStack.slice();
 		}
 
-		private _clear() {
+		#clear() {
 			this.beforeCount.clear();
 			this.afterCount.clear();
 			this.currentStack.length = 0;
@@ -96,9 +96,9 @@ export namespace Reentrancy {
 		}
 
 		*traverse(callTrace: DebugTrace): Generator<number[]> {
-			this._clear();
+			this.#clear();
 			this.sender = this.infos.get(callTrace.from)! as EOAInfo;
-			yield* this._traverse(callTrace, -1);
+			yield* this.#traverse(callTrace, -1);
 		}
 	}
 
@@ -179,7 +179,7 @@ export namespace Reentrancy {
 			this.etherscan = new Etherscan(etherscanApiKey, chainId);
 			const whatsabiConfig: AutoloadConfig = {
 				provider: {
-					getCode: address => this.getCode(address),
+					getCode: address => this.#getCode(address),
 					getStorageAt: (address, slot) => this.etherscan.geth.getStorageAt(address, slot),
 					call: ({ to, data }) => this.etherscan.geth.call(to, data),
 					getAddress: () => { throw new Error("Not implemented"); },
@@ -189,18 +189,18 @@ export namespace Reentrancy {
 			this.autoload = (address: string) => whatsabi.autoload(address, whatsabiConfig);
 		}
 
-		private static _getAllAddresses(callTrace: DebugTrace, set: Set<string>) {
+		static #getAllAddresses(callTrace: DebugTrace, set: Set<string>) {
 			set.add(callTrace.from);
 			set.add(callTrace.to);
 			if (callTrace.calls?.length) {
 				for (const call of callTrace.calls)
-					this._getAllAddresses(call, set);
+					this.#getAllAddresses(call, set);
 			}
 		}
 
 		static getAllAddresses(callTrace: DebugTrace): Set<string> {
 			const set = new Set<string>();
-			this._getAllAddresses(callTrace, set);
+			this.#getAllAddresses(callTrace, set);
 			return set;
 		}
 
@@ -225,7 +225,7 @@ export namespace Reentrancy {
 			return creatorA === creatorB;
 		}
 
-		private async getCode(address: string): Promise<string> {
+		async #getCode(address: string): Promise<string> {
 			const cache = this._codeCache.get(address);
 			if (cache !== undefined)
 				return cache;
@@ -241,7 +241,7 @@ export namespace Reentrancy {
 			addresses.delete(callTrace.from);
 			const contracts = new Array<string>();
 			for (const address of addresses) {
-				const code = await this.getCode(address);
+				const code = await this.#getCode(address);
 				const info = {
 					address,
 					isContract: code !== "0x"
