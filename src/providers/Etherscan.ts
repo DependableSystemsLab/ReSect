@@ -1,6 +1,6 @@
 import { createThrottledFetch } from "fetch-throttler";
 import { Arrayable } from "type-fest";
-import { toURLSearchParams, verifyAddress, verifyHexNumber, verifyTxHash, type Hex, type QueryObject } from "../utils";
+import { toURLSearchParams, Hex, type QueryObject } from "../utils";
 import type { RPC } from "./base";
 
 const fetchInstances = new Map<string, typeof fetch>();
@@ -138,7 +138,7 @@ export class Etherscan {
 		pagination?: Etherscan.Pagination,
 		chain?: number
 	): Promise<Etherscan.TransactionByAddress[]> {
-		address = verifyAddress(address);
+		address = Hex.verifyAddress(address);
 		const params = { address, sort: "asc" };
 		Etherscan.setBlockRange(params, blockRange);
 		return this.requestWithPagination<Etherscan.TransactionByAddress[]>(
@@ -178,7 +178,7 @@ export class Etherscan {
 		}
 		const params: Record<string, string> = {};
 		if (address !== undefined)
-			params.address = verifyAddress(address);
+			params.address = Hex.verifyAddress(address);
 		if (topics !== undefined) {
 			for (let i = 0; i < topics.length; ++i) {
 				params[`topic${i}`] = topics[i];
@@ -320,29 +320,29 @@ export namespace Etherscan {
 		}
 
 		async getBlockByNumber(blockNumber: Hex, chain?: number): Promise<Geth.Block> {
-			blockNumber = verifyHexNumber(blockNumber);
+			blockNumber = Hex.verify(blockNumber);
 			return this.request<Geth.Block>("eth_getBlockByNumber", chain, { tag: blockNumber, boolean: false });
 		}
 
 		async getTransactionByHash(hash: Hex, chain?: number): Promise<Geth.Transaction> {
-			hash = verifyTxHash(hash);
+			hash = Hex.verifyTxHash(hash);
 			return this.request<Geth.Transaction>("eth_getTransactionByHash", chain, { txhash: hash });
 		}
 
 		async call(to: Hex, data: Hex, tag: Geth.BlockTag = "latest", chain?: number): Promise<string> {
-			to = verifyAddress(to);
-			data = verifyHexNumber(data);
+			to = Hex.verifyAddress(to);
+			data = Hex.verify(data);
 			return this.request<string>("eth_call", chain, { to, data, tag });
 		}
 
 		async getCode(address: Hex, tag: Geth.BlockTag = "latest", chain?: number): Promise<string> {
-			address = verifyAddress(address);
+			address = Hex.verifyAddress(address);
 			return this.request<string>("eth_getCode", chain, { address, tag });
 		}
 
 		async getStorageAt(address: Hex, position: Hex, tag: Geth.BlockTag = "latest", chain?: number): Promise<string> {
-			address = verifyAddress(address);
-			position = verifyHexNumber(position);
+			address = Hex.verifyAddress(address);
+			position = Hex.verify(position);
 			return this.request<string>("eth_getStorageAt", chain, { address, position, tag });
 		}
 	}

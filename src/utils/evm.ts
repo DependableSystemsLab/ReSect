@@ -1,8 +1,8 @@
 import { CallType, type CallTrace, type DebugTrace, type Trace } from "../providers/base";
-import { type Hex, removeHexPrefix, hexToString } from "./hex";
+import { Hex } from "./hex";
 
-export function splitInput(input: Hex): [selector?: string, parameter?: string] {
-	input = removeHexPrefix(hexToString(input));
+export function splitInput(input: Hex | undefined): [selector?: string, parameter?: string] {
+	input = input ? Hex.removePrefix(Hex.toString(input)) : "";
 	if (input === "")
 		return [undefined, undefined];
 	if (input.length < 8)

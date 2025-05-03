@@ -1,5 +1,5 @@
 import { ChainName, chainNames } from "../config/Chain";
-import { verifyCallTypes, verifyTxHash, type Hex, type TypeVerifiedDebugTrace } from "../utils";
+import { verifyCallTypes, Hex, type TypeVerifiedDebugTrace } from "../utils";
 import type { DebugTraceProvider, RPC } from "./base";
 
 const tenderlyNetwork = {
@@ -89,7 +89,7 @@ export class Tenderly implements DebugTraceProvider<Tenderly.DebugTrace> {
 		tracer: "callTracer" | "prestateTracer" = "callTracer",
 		onlyTopCall = false
 	): Promise<Tenderly.DebugTrace> {
-		txHash = verifyTxHash(txHash);
+		txHash = Hex.verifyTxHash(txHash);
 		const trace = await this.request<Tenderly.DebugTraceRaw>("debug_traceTransaction", [txHash, { tracer, onlyTopCall }]);
 		return verifyCallTypes(trace);
 	}

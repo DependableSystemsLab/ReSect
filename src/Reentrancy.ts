@@ -1,7 +1,7 @@
 import { whatsabi, type providers, type AutoloadConfig } from "@shazow/whatsabi";
 import { CallType, Etherscan, type DebugTrace, type DebugTraceProvider } from "./providers";
 import { Mainnet, Testnet, type ChainName } from "./config/Chain";
-import { Counter, hexToString, splitInput, type Hex } from "./utils";
+import { Counter, Hex, splitInput } from "./utils";
 
 export namespace Reentrancy {
 	interface ContractInfo {
@@ -264,7 +264,7 @@ export namespace Reentrancy {
 		}
 
 		async *analyze(txHash: Hex): AsyncGenerator<AnalysisResult> {
-			const rawTrace = await this.traceProvider.debugTraceTransaction(hexToString(txHash));
+			const rawTrace = await this.traceProvider.debugTraceTransaction(Hex.toString(txHash));
 			const callTrace = Analyzer.toAnnotatedTrace(rawTrace);
 			const infos = await this.getAddressInfos(callTrace);
 			const sender = callTrace.from;
