@@ -1,5 +1,5 @@
 import type { DataSourceOptions } from "typeorm";
-import { entities } from "../entity";
+import { entities } from "../database/entities";
 
 const {
 	DB_HOST: host = "localhost",

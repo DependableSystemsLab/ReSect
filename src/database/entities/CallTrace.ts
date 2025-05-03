@@ -1,5 +1,5 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-import { CallType } from "../providers";
+import { CallType } from "../../providers";
 import { Transaction } from "./Transaction";
 
 
@@ -16,9 +16,6 @@ export class CallTrace {
 
 	@Column("smallint")
 	depth!: number;
-
-	@Column("integer", { name: "level_index" })
-	levelIndex!: number;
 
 	@Column("character", { length: 40 })
 	from!: string;
@@ -44,17 +41,17 @@ export class CallTrace {
 	@Column("character", { length: 8, nullable: true })
 	selector?: string;
 
-	@Column("text", { nullable: true })
-	parameters?: string;
+	@Column("bytea", { nullable: true })
+	parameters?: Buffer;
 
-	@Column("text", { nullable: true })
-	output?: string;
+	@Column("bytea", { nullable: true })
+	output?: Buffer;
 
 	@Column("integer", {
-		name: "parent_trace_index",
+		name: "parent_index",
 		nullable: true
 	})
-	parentTraceIndex?: number;
+	parentIndex?: number;
 
 	@ManyToOne(
 		() => Transaction,
@@ -71,7 +68,7 @@ export class CallTrace {
 	)
 	@JoinColumn([
 		{ name: "tx_hash", referencedColumnName: "tx_hash" },
-		{ name: "parent_trace_index", referencedColumnName: "index" }
+		{ name: "parent_index", referencedColumnName: "index" }
 	])
 	parent?: CallTrace;
 
@@ -81,6 +78,12 @@ export class CallTrace {
 		{ persistence: false }
 	)
 	children?: CallTrace[];
+
+	get levelIndex(): number {
+		return this.parentIndex === undefined
+			? this.index
+			: this.index - this.parentIndex - 1;
+	}
 
 	get stack(): number[] {
 		const result: number[] = [this.levelIndex];
