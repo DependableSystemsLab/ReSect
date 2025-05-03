@@ -1,3 +1,4 @@
+import "basic-type-extensions";
 import type { CallTrace, DebugTrace, MinimalTrace } from "../providers";
 
 export namespace TraceConverter {
@@ -29,10 +30,10 @@ export namespace TraceConverter {
 				return false;
 			return i === b.length - 1 && a[i] === b[i] - 1;
 		}
-		return a.length === b.length - 1 && b[b.length - 1] === 0;
+		return a.length === b.length - 1 && b.last() === 0;
 	}
 
-	export function callTraceToDebugTrace<T extends MinimalTrace = MinimalTrace>(
+	export function callTracesToDebugTrace<T extends MinimalTrace = MinimalTrace>(
 		callTraces: CallTrace<T>[],
 		verify: boolean = true,
 		sort: boolean = false
@@ -46,7 +47,7 @@ export namespace TraceConverter {
 		const stack = [[topTrace, traceAddress ?? []] as const];
 		for (let i = 1; i < callTraces.length; i++) {
 			const { traceAddress, ...rest } = callTraces[i];
-			const last = stack[stack.length - 1];
+			const last = stack.last();
 			if (verify && !verifyAdjacentTraceAddress(last[1], traceAddress))
 				throw new Error("Invalid array of call traces: traceAddress mismatch");
 			const debugTrace = rest as unknown as DebugTrace<T>;
@@ -60,7 +61,7 @@ export namespace TraceConverter {
 			else {
 				for (let j = 0; j < lengthDiff + 1; j++)
 					stack.pop();
-				stack[stack.length - 1][0].calls!.push(debugTrace);
+				stack.last()[0].calls!.push(debugTrace);
 			}
 			stack.push([debugTrace, traceAddress]);
 		}

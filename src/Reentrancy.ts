@@ -1,4 +1,5 @@
 import { whatsabi, type providers, type AutoloadConfig } from "@shazow/whatsabi";
+import "basic-type-extensions";
 import { CallType, Etherscan, type DebugTrace, type DebugTraceProvider } from "./providers";
 import { Mainnet, Testnet, type ChainName } from "./config/Chain";
 import { Counter, Hex, splitInput } from "./utils";
@@ -282,7 +283,7 @@ export namespace Reentrancy {
 				} as AnalysisResult;
 
 				const traces = toTraceList(callTrace, stack);
-				const lastTrace = traces[traces.length - 1];
+				const lastTrace = traces.last();
 				lastTrace.label = Label.VictimIn;
 				const victimInfo = infos.get(lastTrace.to)!;
 				result.victims = Array.from(infos.values())

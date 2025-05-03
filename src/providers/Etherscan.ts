@@ -1,3 +1,4 @@
+import "basic-type-extensions";
 import { createThrottledFetch } from "fetch-throttler";
 import { Arrayable } from "type-fest";
 import { toURLSearchParams, Hex, type QueryObject } from "../utils";
@@ -154,8 +155,8 @@ export class Etherscan {
 		const slices = new Array(Math.ceil(contractAddresses.length / 5));
 		for (let i = 0; i < contractAddresses.length; i += 5)
 			slices[i / 5] = contractAddresses.slice(i, i + 5);
-		return await Promise.all(
-			slices.map(slice => this.request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses: slice }))
+		return await slices.mapAsync(
+			slice => this.request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses: slice })
 		).then(results => results.flat());
 	}
 

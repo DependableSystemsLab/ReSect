@@ -12,6 +12,7 @@
 	"dependencies": {
 		"@dotenvx/dotenvx": "^1.42.2",
 		"@shazow/whatsabi": "^0.21.0",
+		"basic-type-extensions": "^4.4.0",
 		"fetch-throttler": "^1.1.0",
 		"typeorm": "^0.3.22"
 	},

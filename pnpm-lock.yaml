@@ -14,6 +14,9 @@ importers:
       '@shazow/whatsabi':
         specifier: ^0.21.0
         version: 0.21.0(@noble/hashes@1.8.0)(typescript@5.8.3)
+      basic-type-extensions:
+        specifier: ^4.4.0
+        version: 4.4.0
       fetch-throttler:
         specifier: ^1.1.0
         version: 1.1.0
@@ -209,6 +212,24 @@ packages:
   '@babel/types@7.27.1':
     resolution: {integrity: sha512-+EzkxvLNfiUeKMgy/3luqfsCWFRXLb7U6wNQTk60tovuckwB15B191tJWvpp4HjiQWdJkCxO3Wbvc6jlk3Xb2Q==}
     engines: {node: '>=6.9.0'}
+
+  '@basic-type-extensions/array-constructor@1.0.2':
+    resolution: {integrity: sha512-FzQYE2BGEYEg3TZ36kfBV2w46aV7MIDtDZvZD8oMLLy/JyQDnaaaiDhVBhD+Sfk8NTNgMYwqsps5J2mwtBG6Uw==}
+
+  '@basic-type-extensions/array@1.5.0':
+    resolution: {integrity: sha512-5GqKlHJhSvCia84fMCRyJY0IauJ3GKF0P0hJ0pucme4lNnzrKeUrRT+4M/UcFwZnaZ6qRyX1O56l90WkpcKUEw==}
+
+  '@basic-type-extensions/math@1.1.0':
+    resolution: {integrity: sha512-XOia2Yn8nDHGuoKPrvHSTN+TMdtDeX4rdRCOyDZoHbiqoaZP3uSS6nS/dULUrCDnZJpz9kn4rUW6ub/8/IFKWQ==}
+
+  '@basic-type-extensions/object-constructor@2.0.0':
+    resolution: {integrity: sha512-/VxLiv0OaGvo45inFzYHbmKOfWoyr1rkV4bdikm1pBjUJ5z/80WuXttDlWjw5JWrkh/0iCjI7KFygY9hY/JCQA==}
+
+  '@basic-type-extensions/promise-constructor@1.0.2':
+    resolution: {integrity: sha512-sYEUYAflf9e27LnBzTqOjjdy0XzH/DR/GvGPj+g+u4jGRhLmG8pbE9SHoMG6XAEzSOKNWy/2LtoCUG6ywxxk6A==}
+
+  '@basic-type-extensions/string-constructor@1.0.4':
+    resolution: {integrity: sha512-kfwA0OkBE1suQSL2x76gac6gdUcspVE8pZXJgSsm7NXg/IBsNJHUlsUFSd+JGnp52mipH9GLM/u0blN9e5uxnA==}
 
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
@@ -514,6 +535,9 @@ packages:
 
   base64-js@1.5.1:
     resolution: {integrity: sha512-AKpaYlHn8t4SVbOHCy+b5+KKgvR4vrsD8vbvrbiQJps7fKDTkjkDry6ji0rUJjC0kzbNePLwzxq8iypo41qeWA==}
+
+  basic-type-extensions@4.4.0:
+    resolution: {integrity: sha512-0jaPllqVMq5zAaWPbshYz23ZANBvcLj/cQE4YCryeP49sFNJ9GZG+Pb14n4whWgyu8EtVVnwcrCNHhMXvEmbXA==}
 
   brace-expansion@1.1.11:
     resolution: {integrity: sha512-iCuPHDFgrHX7H2vEI/5xpz07zSHB00TpugqhmYtVmMO6518mCuRMoOYFldEBl0g187ufozdaHgWKcYFb61qGiA==}
@@ -1046,6 +1070,9 @@ packages:
   locate-path@5.0.0:
     resolution: {integrity: sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g==}
     engines: {node: '>=8'}
+
+  lodash.clonedeep@4.5.0:
+    resolution: {integrity: sha512-H5ZhCF25riFd9uB5UCkVKo61m3S/xZk1x4wA6yp/L3RFP6Z/eHH1ymQcGLo7J3GMPfm0V/7m1tryHuGVxpqEBQ==}
 
   lodash.memoize@4.1.2:
     resolution: {integrity: sha512-t7j+NzmgnQzTAYXcsHYLgimltOV1MXHtlOWf6GjL9Kj8GK5FInw5JotxvbOs+IvV1/Dzo04/fCGfLVs7aXb4Ag==}
@@ -1723,6 +1750,20 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.27.1
 
+  '@basic-type-extensions/array-constructor@1.0.2': {}
+
+  '@basic-type-extensions/array@1.5.0': {}
+
+  '@basic-type-extensions/math@1.1.0': {}
+
+  '@basic-type-extensions/object-constructor@2.0.0':
+    dependencies:
+      lodash.clonedeep: 4.5.0
+
+  '@basic-type-extensions/promise-constructor@1.0.2': {}
+
+  '@basic-type-extensions/string-constructor@1.0.4': {}
+
   '@bcoe/v8-coverage@0.2.3': {}
 
   '@cspotcode/source-map-support@0.8.1':
@@ -2153,6 +2194,15 @@ snapshots:
   balanced-match@1.0.2: {}
 
   base64-js@1.5.1: {}
+
+  basic-type-extensions@4.4.0:
+    dependencies:
+      '@basic-type-extensions/array': 1.5.0
+      '@basic-type-extensions/array-constructor': 1.0.2
+      '@basic-type-extensions/math': 1.1.0
+      '@basic-type-extensions/object-constructor': 2.0.0
+      '@basic-type-extensions/promise-constructor': 1.0.2
+      '@basic-type-extensions/string-constructor': 1.0.4
 
   brace-expansion@1.1.11:
     dependencies:
@@ -2824,6 +2874,8 @@ snapshots:
   locate-path@5.0.0:
     dependencies:
       p-locate: 4.1.0
+
+  lodash.clonedeep@4.5.0: {}
 
   lodash.memoize@4.1.2: {}
 
