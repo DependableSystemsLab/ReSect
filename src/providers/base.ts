@@ -1,3 +1,5 @@
+import { Database } from "../database";
+
 export enum CallType {
 	CALL = "CALL",
 	STATICCALL = "STATICCALL",
@@ -37,6 +39,22 @@ export interface TraceProvider<T extends MinimalTrace = MinimalTrace> {
 export interface DebugTraceProvider<T extends MinimalTrace = MinimalTrace> {
 	debugTraceTransaction(txHash: string): Promise<DebugTrace<T>>;
 }
+
+export abstract class DebugTraceProviderWithDatabase implements DebugTraceProvider<Trace> {
+	protected constructor(protected readonly db: Database) { }
+
+	protected abstract _debugTraceTransaction(txHash: string): Promise<DebugTrace<Trace>>;
+
+	public async debugTraceTransaction(txHash: string): Promise<DebugTrace<Trace>> {
+		let result = await this.db.getDebugTrace(txHash);
+		if (result)
+			return result;
+		result = await this._debugTraceTransaction(txHash);
+		await this.db.saveDebugTrace(result, txHash);
+		return result;
+	}
+}
+
 
 export namespace RPC {
 	export interface Response<T = any> {
