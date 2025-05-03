@@ -1,6 +1,7 @@
 import { createThrottledFetch } from "fetch-throttler";
 import { Arrayable } from "type-fest";
 import { toURLSearchParams, verifyAddress, verifyHexNumber, verifyTxHash, type Hex, type QueryObject } from "../utils";
+import type { RPC } from "./base";
 
 const fetchInstances = new Map<string, typeof fetch>();
 function getFetch(apiKey: string | readonly [key: string, tier: Etherscan.APITier]) {
@@ -295,9 +296,11 @@ export namespace Etherscan {
 					"Accept": "application/json"
 				}
 			});
-			const resp = await response.json() as Geth.Response<T>;
+			const resp = await response.json() as RPC.Response<T> | RPC.Error;
 			if (!response.ok)
 				throw new Error(`Etherscan API error: ${response.status} ${response.statusText}`);
+			if ("error" in resp)
+				throw new Error(`Etherscan API error: ${resp.error.message} (${resp.error.slug})`);
 			return resp.result;
 		}
 
@@ -335,12 +338,6 @@ export namespace Etherscan {
 	}
 
 	export namespace Geth {
-		export interface Response<T> {
-			jsonrpc: string;
-			id: number;
-			result: T;
-		}
-
 		export type BlockTag = "earliest" | "latest" | "pending";
 
 		export interface Block {

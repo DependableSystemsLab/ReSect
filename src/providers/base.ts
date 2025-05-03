@@ -32,3 +32,18 @@ export interface DebugTraceProvider<T extends Trace = Trace> {
 	debugTraceTransaction(txHash: string): Promise<DebugTrace<T>>;
 }
 
+export namespace RPC {
+	export interface Response<T = any> {
+		id: number;
+		jsonrpc: string;
+		result: T;
+	}
+
+	export interface Error {
+		error: {
+			id: string;
+			slug: string;
+			message: string;
+		}
+	}
+}

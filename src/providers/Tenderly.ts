@@ -1,6 +1,6 @@
 import { ChainName, chainNames } from "../config/Chain";
 import { verifyCallTypes, verifyTxHash, type Hex, type TypeVerifiedDebugTrace } from "../utils";
-import type { DebugTraceProvider } from "./base";
+import type { DebugTraceProvider, RPC } from "./base";
 
 const tenderlyNetwork = {
 	Ethereum: "mainnet",
@@ -76,7 +76,7 @@ export class Tenderly implements DebugTraceProvider<Tenderly.DebugTrace> {
 			const text = await result.text();
 			throw new Error(`Tenderly API error: ${text}`);
 		}
-		const json = await result.json() as Tenderly.RpcResponse<T> | Tenderly.RpcError;
+		const json = await result.json() as RPC.Response<T> | RPC.Error;
 		if ("error" in json) {
 			const error = json.error;
 			throw new Error(`Tenderly API error: ${error.message} (${error.slug})`);
@@ -102,20 +102,6 @@ export namespace Tenderly {
 		| [chain: ChainName, accessKey: string]
 		| [chainId: number, accessKey: string]
 		| [chain: ChainName | number, accessKey: string];
-
-	export interface RpcResponse<T> {
-		id: number;
-		jsonrpc: string;
-		result: T;
-	}
-
-	export interface RpcError {
-		error: {
-			id: string;
-			slug: string;
-			message: string;
-		}
-	}
 
 	export interface DebugTraceRaw {
 		type: string;
