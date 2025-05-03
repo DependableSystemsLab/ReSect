@@ -7,11 +7,12 @@
 		"build": "tsc -b tsconfig.build.json",
 		"test": "jest"
 	},
-	"author": "true_mogician",
+	"author": "Yuqi Liu",
 	"license": "MIT",
 	"dependencies": {
 		"@shazow/whatsabi": "^0.21.0",
-		"fetch-throttler": "^1.1.0"
+		"fetch-throttler": "^1.1.0",
+		"typeorm": "^0.3.22"
 	},
 	"devDependencies": {
 		"@types/jest": "^29.5.14",
