@@ -83,6 +83,9 @@ export namespace RPC {
 		input?: string;
 	}
 
+	/**
+	 * Every field is in hex format.
+	 */
 	export interface Block<T extends string | Transaction = string> {
 		baseFeePerGas: string;
 		difficulty: string;
@@ -113,12 +116,17 @@ export namespace RPC {
 		from: string;
 		gas: string;
 		gasPrice: string;
+		maxFeePerGas: string;
+		maxPriorityFeePerGas: string;
 		hash: string;
 		input: string;
 		nonce: string;
 		to: string;
 		transactionIndex: string;
 		value: string;
+		type: string;
+		accessList: string[];
+		chainId: string;
 		v: string;
 		r: string;
 		s: string;
