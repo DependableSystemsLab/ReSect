@@ -1,6 +1,6 @@
 import { whatsabi, type providers, type AutoloadConfig } from "@shazow/whatsabi";
 import "basic-type-extensions";
-import { CallType, Etherscan, type DebugTrace, type DebugTraceProvider } from "./providers";
+import { CallType, Etherscan, type RPC, type DebugTrace, type DebugTraceProvider } from "./providers";
 import { Mainnet, Testnet, type ChainName } from "./config/Chain";
 import { Counter, Hex, splitInput } from "./utils";
 
@@ -164,29 +164,29 @@ export namespace Reentrancy {
 	}
 
 	export class Analyzer {
-		private readonly _codeCache = new Map<string, string>();
-		readonly etherscan: Etherscan;
-		readonly autoload: (address: string) => Promise<whatsabi.AutoloadResult>;
+		readonly #rpcProvider: RPC.Provider;
+		readonly #autoload: (address: string) => Promise<whatsabi.AutoloadResult>;
 
 		constructor(
 			readonly chain: ChainName,
-			etherscanApiKey: readonly [key: string, tier: Etherscan.APITier],
-			readonly traceProvider: DebugTraceProvider
+			readonly etherscan: Etherscan,
+			readonly traceProvider: DebugTraceProvider,
+			rpcProvider?: RPC.Provider
 		) {
 			const chainId = chain in Mainnet
 				? Mainnet[chain as keyof typeof Mainnet]
 				: Testnet[chain as keyof typeof Testnet];
-			this.etherscan = new Etherscan(etherscanApiKey, chainId);
 			const whatsabiConfig: AutoloadConfig = {
 				provider: {
-					getCode: address => this.#getCode(address),
-					getStorageAt: (address, slot) => this.etherscan.geth.getStorageAt(address, slot),
-					call: ({ to, data }) => this.etherscan.geth.call(to, data),
+					getCode: address => this.#rpcProvider.getCode(address, "latest"),
+					getStorageAt: (address, slot) => this.#rpcProvider.getStorageAt(address, Hex.verify(slot), "latest"),
+					call: ({ to, data }) => this.#rpcProvider.call({ to, input: data }, "latest"),
 					getAddress: () => { throw new Error("Not implemented"); },
 				} satisfies providers.Provider,
-				abiLoader: new whatsabi.loaders.EtherscanV2ABILoader({ apiKey: etherscanApiKey[0], chainId })
+				abiLoader: new whatsabi.loaders.EtherscanV2ABILoader({ apiKey: etherscan.apiKey, chainId })
 			};
-			this.autoload = (address: string) => whatsabi.autoload(address, whatsabiConfig);
+			this.#autoload = (address: string) => whatsabi.autoload(address, whatsabiConfig);
+			this.#rpcProvider = rpcProvider ??= etherscan.geth;
 		}
 
 		static #getAllAddresses(callTrace: DebugTrace, set: Set<string>) {
@@ -225,15 +225,6 @@ export namespace Reentrancy {
 			return creatorA === creatorB;
 		}
 
-		async #getCode(address: string): Promise<string> {
-			const cache = this._codeCache.get(address);
-			if (cache !== undefined)
-				return cache;
-			const code = await this.etherscan.geth.getCode(address);
-			this._codeCache.set(address, code);
-			return code;
-		}
-
 		async getAddressInfos(callTrace: DebugTrace): Promise<Map<string, AddressInfo>> {
 			const result = new Map<string, AddressInfo>();
 			const addresses = Analyzer.getAllAddresses(callTrace);
@@ -241,7 +232,7 @@ export namespace Reentrancy {
 			addresses.delete(callTrace.from);
 			const contracts = new Array<string>();
 			for (const address of addresses) {
-				const code = await this.#getCode(address);
+				const code = await this.#rpcProvider.getCode(address, "latest");
 				const info = {
 					address,
 					isContract: code !== "0x"

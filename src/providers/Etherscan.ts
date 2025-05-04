@@ -4,6 +4,7 @@ import { Arrayable } from "type-fest";
 import { toURLSearchParams, Hex, type QueryObject } from "../utils";
 import type { RPC } from "./base";
 
+
 const fetchInstances = new Map<string, typeof fetch>();
 function getFetch(apiKey: string | readonly [key: string, tier: Etherscan.APITier]) {
 	const [key, tier = Etherscan.APITier.Free] = typeof apiKey == "string" ? [apiKey] : apiKey;
@@ -275,18 +276,18 @@ export namespace Etherscan {
 }
 
 export namespace Etherscan {
-	export class Geth {
-		private _fetch: typeof fetch;
+	export class Geth implements RPC.MultiChainProvider {
+		readonly #fetch: typeof fetch;
 		readonly apiKey: string;
 
 		constructor(
 			apiKey: string | readonly [key: string, tier: Etherscan.APITier],
 			public chainId: number = 1
 		) {
-			[this.apiKey, this._fetch] = getFetch(apiKey);
+			[this.apiKey, this.#fetch] = getFetch(apiKey);
 		}
 
-		private async request<T>(
+		async #request<T>(
 			action: string,
 			chain?: number,
 			params?: QueryObject
@@ -301,7 +302,7 @@ export namespace Etherscan {
 			});
 			const url = new URL(Etherscan.BASE_URL);
 			url.search = searchParams.toString();
-			const response = await this._fetch(url.href, {
+			const response = await this.#fetch(url.href, {
 				method: "GET",
 				headers: {
 					"Accept": "application/json"
@@ -315,81 +316,44 @@ export namespace Etherscan {
 			return resp.result;
 		}
 
-		async blockNumber(chain?: number): Promise<number> {
-			const result = await this.request<string>("eth_blockNumber", chain);
-			return parseInt(result, 16);
+		#verifyBlockTag(tag: RPC.BlockNumber): "earliest" | "latest" | "pending" {
+			if (tag == "earliest" || tag == "latest" || tag == "pending")
+				return tag;
+			throw new Error(`Unsupported block tag: ${tag}`);
 		}
 
-		async getBlockByNumber(blockNumber: Hex, chain?: number): Promise<Geth.Block> {
-			blockNumber = Hex.verify(blockNumber);
-			return this.request<Geth.Block>("eth_getBlockByNumber", chain, { tag: blockNumber, boolean: false });
+		blockNumber(chain?: number): Promise<string> {
+			return this.#request<string>("eth_blockNumber", chain);
 		}
 
-		async getTransactionByHash(hash: Hex, chain?: number): Promise<Geth.Transaction> {
-			hash = Hex.verifyTxHash(hash);
-			return this.request<Geth.Transaction>("eth_getTransactionByHash", chain, { txhash: hash });
+		getBlockByNumber(blockNumber: RPC.BlockNumber, full: boolean, chain?: number): Promise<RPC.Block> {
+			return this.#request<RPC.Block>("eth_getBlockByNumber", chain, { tag: blockNumber, boolean: full });
 		}
 
-		async call(to: Hex, data: Hex, tag: Geth.BlockTag = "latest", chain?: number): Promise<string> {
-			to = Hex.verifyAddress(to);
-			data = Hex.verify(data);
-			return this.request<string>("eth_call", chain, { to, data, tag });
+		getTransactionByHash(hash: string, chain?: number): Promise<RPC.Transaction> {
+			return this.#request<RPC.Transaction>("eth_getTransactionByHash", chain, { txhash: hash });
 		}
 
-		async getCode(address: Hex, tag: Geth.BlockTag = "latest", chain?: number): Promise<string> {
-			address = Hex.verifyAddress(address);
-			return this.request<string>("eth_getCode", chain, { address, tag });
+		call(request: RPC.CallRequest, tag: RPC.BlockNumber, chain?: number): Promise<string> {
+			tag = this.#verifyBlockTag(tag);
+			return this.#request<string>("eth_call", chain, {
+				from: request.from,
+				to: request.to,
+				data: request.input,
+				gas: request.gas,
+				gasPrice: request.gasPrice,
+				value: request.value,
+				tag
+			});
 		}
 
-		async getStorageAt(address: Hex, position: Hex, tag: Geth.BlockTag = "latest", chain?: number): Promise<string> {
-			address = Hex.verifyAddress(address);
-			position = Hex.verify(position);
-			return this.request<string>("eth_getStorageAt", chain, { address, position, tag });
-		}
-	}
-
-	export namespace Geth {
-		export type BlockTag = "earliest" | "latest" | "pending";
-
-		export interface Block {
-			baseFeePerGas: string;
-			difficulty: string;
-			extraData: string;
-			gasLimit: string;
-			gasUsed: string;
-			hash: string;
-			logsBloom: string;
-			miner: string;
-			mixHash: string;
-			nonce: string;
-			number: string;
-			parentHash: string;
-			receiptsRoot: string;
-			sha3Uncles: string;
-			size: string;
-			stateRoot: string;
-			timestamp: string;
-			totalDifficulty: string;
-			transactions: string[];
-			transactionsRoot: string;
-			uncles: string[];
+		getCode(address: string, tag: RPC.BlockNumber, chain?: number): Promise<string> {
+			tag = this.#verifyBlockTag(tag);
+			return this.#request<string>("eth_getCode", chain, { address, tag });
 		}
 
-		export interface Transaction {
-			blockHash: string;
-			blockNumber: string;
-			from: string;
-			gas: string;
-			gasPrice: string;
-			hash: string;
-			input: string;
-			nonce: string;
-			to: string;
-			transactionIndex: string;
-			value: string;
-			v: string;
-			r: string;
-			s: string;
+		getStorageAt(address: string, position: string, tag: RPC.BlockNumber, chain?: number): Promise<string> {
+			return this.#request<string>("eth_getStorageAt", chain, { address, position, tag });
 		}
 	}
 }
