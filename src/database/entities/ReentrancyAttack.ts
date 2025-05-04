@@ -3,6 +3,27 @@ import { AttackStrategy } from "./AttackStrategy";
 import { Transaction } from "./Transaction";
 
 
+enum ReentrancyType {
+	Attack = "Attack",
+	WhitehatAttack = "Whitehat Attack",
+	RugPull = "Rug Pull"
+}
+
+enum ReentrancyEntryPoint {
+	Fallback = "Fallback",
+	MaliciousToken = "Malicious Token",
+	ERCHook = "ERC Hook",
+	ApplicationHook = "Application Hook"
+}
+
+enum ReentrancyScope {
+	SingleFunction = "Single Function",
+	CrossFunction = "Cross Function",
+	CrossContract = "Cross Contract",
+	CrossProject = "Cross Project",
+	CrossChain = "Cross Chain"
+}
+
 @Entity("ReentrancyAttack")
 export class ReentrancyAttack {
 	@PrimaryColumn("integer")
@@ -12,7 +33,7 @@ export class ReentrancyAttack {
 	name!: string;
 
 	@Column("enum", {
-		enum: ReentrancyAttack.Type,
+		enum: ReentrancyType,
 		enumName: "AttackType",
 	})
 	type!: ReentrancyAttack.Type;
@@ -21,7 +42,7 @@ export class ReentrancyAttack {
 	loss?: number;
 
 	@Column("enum", {
-		enum: ReentrancyAttack.Scope,
+		enum: ReentrancyScope,
 		enumName: "ReentrancyScope",
 		nullable: true
 	})
@@ -29,7 +50,7 @@ export class ReentrancyAttack {
 
 	@Column("enum", {
 		name: "entry_point",
-		enum: ReentrancyAttack.EntryPoint,
+		enum: ReentrancyEntryPoint,
 		enumName: "EntryPoint",
 		nullable: true
 	})
@@ -60,24 +81,11 @@ export class ReentrancyAttack {
 }
 
 export namespace ReentrancyAttack {
-	export enum Type {
-		Attack = "Attack",
-		WhitehatAttack = "Whitehat Attack",
-		RugPull = "Rug Pull"
-	}
+	export const Type = ReentrancyType;
+	export const EntryPoint = ReentrancyEntryPoint;
+	export const Scope = ReentrancyScope;
 
-	export enum EntryPoint {
-		Fallback = "Fallback",
-		MaliciousToken = "Malicious Token",
-		ERCHook = "ERC Hook",
-		ApplicationHook = "Application Hook"
-	}
-
-	export enum Scope {
-		SingleFunction = "Single Function",
-		CrossFunction = "Cross Function",
-		CrossContract = "Cross Contract",
-		CrossProject = "Cross Project",
-		CrossChain = "Cross Chain"
-	}
+	export type Type = ReentrancyType;
+	export type EntryPoint = ReentrancyEntryPoint;
+	export type Scope = ReentrancyScope;
 }

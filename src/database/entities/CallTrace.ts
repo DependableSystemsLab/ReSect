@@ -67,7 +67,7 @@ export class CallTrace {
 		{ persistence: false }
 	)
 	@JoinColumn([
-		{ name: "tx_hash", referencedColumnName: "tx_hash" },
+		{ name: "tx_hash", referencedColumnName: "txHash" },
 		{ name: "parent_index", referencedColumnName: "index" }
 	])
 	parent?: CallTrace;

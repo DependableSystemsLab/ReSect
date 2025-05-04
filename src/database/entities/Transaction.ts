@@ -1,9 +1,16 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-import { Blockchain } from "./Blockchain";
-import { ReentrancyAttack } from "./ReentrancyAttack";
-import { CallTrace } from "./CallTrace";
 import { Address } from "./Address";
+import { Block } from "./Block";
+import { CallTrace } from "./CallTrace";
+import { ReentrancyAttack } from "./ReentrancyAttack";
 
+
+enum TransactionAction {
+	VulnerableContractDeployment = "VulnerableContractDeployment",
+	AttackContractDeployment = "AttackContractDeployment",
+	AttackPreparation = "AttackPreparation",
+	Exploit = "Exploit"
+}
 
 @Entity("Transaction")
 export class Transaction {
@@ -13,8 +20,11 @@ export class Transaction {
 	@Column("integer", { name: "blockchain" })
 	blockchainId!: number;
 
-	@Column("timestamp")
-	timestamp!: Date;
+	@Column("integer", { name: "block_number" })
+	blockNumber!: number;
+
+	@Column("integer", { name: "block_index" })
+	blockIndex!: number;
 
 	@Column("character", { length: 40 })
 	sender!: string;
@@ -23,10 +33,10 @@ export class Transaction {
 	receiver?: string;
 
 	@Column("integer", { name: "associated_attack" })
-	attackId!: number;
+	attackId?: number;
 
 	@Column("enum", {
-		enum: Transaction.Action,
+		enum: TransactionAction,
 		enumName: "TransactionAction",
 		nullable: true,
 		array: true
@@ -34,11 +44,14 @@ export class Transaction {
 	actions?: Transaction.Action[];
 
 	@ManyToOne(
-		() => Blockchain,
+		() => Block,
 		{ persistence: false }
 	)
-	@JoinColumn({ name: "blockchain" })
-	blockchain?: Blockchain;
+	@JoinColumn([
+		{ name: "blockchain", referencedColumnName: "blockchainId" },
+		{ name: "block_number", referencedColumnName: "number" }
+	])
+	block?: Block;
 
 	@ManyToOne(
 		() => ReentrancyAttack,
@@ -61,13 +74,13 @@ export class Transaction {
 		{ persistence: false }
 	)
 	createdContracts?: Address[];
+
+	get timestamp(): Date | undefined {
+		return this.block?.timestamp;
+	}
 }
 
 export namespace Transaction {
-	export enum Action {
-		VulnerableContractDeployment = "VulnerableContractDeployment",
-		AttackContractDeployment = "AttackContractDeployment",
-		AttackPreparation = "AttackPreparation",
-		Exploit = "Exploit"
-	}
+	export const Action = TransactionAction;
+	export type Action = TransactionAction;
 }

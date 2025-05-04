@@ -1,4 +1,4 @@
-import type { DataSourceOptions } from "typeorm";
+import { DefaultNamingStrategy, type DataSourceOptions, type NamingStrategyInterface, type Table } from "typeorm";
 import { entities } from "../database/entities";
 
 const {
@@ -23,6 +23,27 @@ function parseBool(value: string | undefined): boolean {
 	throw new Error(`Invalid boolean value: ${value}`);
 }
 
+class NamingStrategy extends DefaultNamingStrategy implements NamingStrategyInterface {
+	static readonly inst = new NamingStrategy();
+
+	override primaryKeyName(tableOrName: string | Table, columnNames: string[]): string {
+		return `${this.getTableName(tableOrName)}.PK(${columnNames.join(",")})`;
+	}
+
+	override uniqueConstraintName(tableOrName: string | Table, columnNames: string[]): string {
+		return `${this.getTableName(tableOrName)}.UQ(${columnNames.join(",")})`;
+	}
+
+	override foreignKeyName(_: string | Table, columnNames: string[], referencedTablePath?: string, referencedColumnNames?: string[]): string {
+		const referenced = referencedColumnNames ? referencedColumnNames.join(",") : "";
+		return `FK(${columnNames.join(",")})->${referencedTablePath}(${referenced})`;
+	}
+
+	override indexName(tableOrName: string | Table, columnNames: string[], _where?: string): string {
+		return `${this.getTableName(tableOrName)}.IDX(${columnNames.join(",")})`;
+	}
+}
+
 export const typeormConfig: DataSourceOptions = {
 	type: "postgres",
 	host,
@@ -33,5 +54,6 @@ export const typeormConfig: DataSourceOptions = {
 	schema,
 	synchronize: parseBool(synchronize),
 	logging: parseBool(logging),
+	namingStrategy: NamingStrategy.inst,
 	entities: [...entities]
 };

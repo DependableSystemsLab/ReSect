@@ -14,6 +14,7 @@
 		"@shazow/whatsabi": "^0.21.0",
 		"basic-type-extensions": "^4.4.0",
 		"fetch-throttler": "^1.1.0",
+		"pg": "^8.15.6",
 		"typeorm": "^0.3.22"
 	},
 	"devDependencies": {

@@ -9,7 +9,7 @@ export class AttackStrategy {
 	@Column("character varying", { length: 64 })
 	name!: string;
 
-	@Column("integer", { name: "parent_id", nullable: true })
+	@Column("integer", { name: "parent", nullable: true })
 	parentId?: number;
 
 	@Column("text", { nullable: true })
@@ -27,6 +27,6 @@ export class AttackStrategy {
 		strategy => strategy.subStrategies,
 		{ persistence: false }
 	)
-	@JoinColumn({ name: "parent_id" })
+	@JoinColumn({ name: "parent" })
 	parentStrategy?: AttackStrategy;
 }
