@@ -1,5 +1,5 @@
 import { Etherscan } from "../providers/Etherscan";
-import { Mainnet, Testnet, type ChainName } from "./Chain";
+import { Chain, type ChainName } from "./Chain";
 
 const {
 	ETHERSCAN_API_KEY: etherscanApiKey_,
@@ -37,7 +37,7 @@ const tenderlyKeys = Object.keys(process.env)
 			.split("_")
 			.map(part => part.charAt(0).toUpperCase() + part.substring(1).toLowerCase())
 			.join("");
-		if (!(chain in Mainnet) && !(chain in Testnet))
+		if (!(chain in Chain))
 			throw new Error(`Invalid chain name in TENDERLY_ACCESS_KEY: ${chain} (${name})`);
 		return [chain as ChainName, value] as const;
 	})

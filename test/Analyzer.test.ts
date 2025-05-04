@@ -1,4 +1,4 @@
-import { Mainnet, Testnet, type ChainName } from "../src/config/Chain";
+import { Chain, type ChainName } from "../src/config/Chain";
 import { etherscanApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Etherscan, TenderlyWithDb, type DebugTraceProvider } from "../src/providers";
 import { Reentrancy } from "../src/Reentrancy";
@@ -30,8 +30,7 @@ describe("Reentrancy Analyzer", () => {
 		const it = testCase.skip ? test.skip : test;
 		it(`${testCase.name} on ${testCase.chain}`, async () => {
 			const { chain, txHash } = testCase;
-			const chainId = Mainnet[chain as keyof typeof Mainnet] ?? Testnet[chain as keyof typeof Testnet];
-			const etherscan = new Etherscan(etherscanApiKey, chainId);
+			const etherscan = new Etherscan(etherscanApiKey, Chain[chain]);
 			let provider = debugProviders.get(chain);
 			if (!provider) {
 				if (!(chain in tenderlyNodeAccessKeys))

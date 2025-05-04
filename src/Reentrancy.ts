@@ -1,7 +1,7 @@
 import { whatsabi, type providers, type AutoloadConfig } from "@shazow/whatsabi";
 import "basic-type-extensions";
 import { CallType, Etherscan, type RPC, type DebugTrace, type DebugTraceProvider } from "./providers";
-import { Mainnet, Testnet, type ChainName } from "./config/Chain";
+import { Chain, type ChainName } from "./config/Chain";
 import { Counter, Hex, splitInput } from "./utils";
 
 export namespace Reentrancy {
@@ -173,9 +173,7 @@ export namespace Reentrancy {
 			readonly traceProvider: DebugTraceProvider,
 			rpcProvider?: RPC.Provider
 		) {
-			const chainId = chain in Mainnet
-				? Mainnet[chain as keyof typeof Mainnet]
-				: Testnet[chain as keyof typeof Testnet];
+			const chainId = Chain[chain];
 			const whatsabiConfig: AutoloadConfig = {
 				provider: {
 					getCode: address => this.#rpcProvider.getCode(address, "latest"),
