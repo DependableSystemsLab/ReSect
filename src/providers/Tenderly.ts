@@ -1,6 +1,8 @@
 import { ChainName, chainNames } from "../config/Chain";
+import { Database } from "../database";
 import { verifyCallTypes, Hex, type TypeVerifiedDebugTrace } from "../utils";
-import type { DebugTraceProvider, RPC } from "./base";
+import { getDebugTraceWithDb, type DebugTrace, type Trace, type DebugTraceProvider, type RPC } from "./base";
+
 
 const tenderlyNetwork = {
 	Ethereum: "mainnet",
@@ -27,7 +29,7 @@ const tenderlyNetwork = {
 	zkSyncSepolia: "zksync-sepolia"
 } satisfies Partial<Record<ChainName, string>>;
 
-export class Tenderly implements DebugTraceProvider<Tenderly.DebugTrace> {
+export class Tenderly implements DebugTraceProvider<DebugTrace<Trace>> {
 	private static _rpcId = 0;
 	private _chain!: Tenderly.SupportedNetwork;
 	private _accessKey!: string;
@@ -84,6 +86,10 @@ export class Tenderly implements DebugTraceProvider<Tenderly.DebugTrace> {
 		return json.result;
 	}
 
+	getDebugTrace(txHash: string): Promise<DebugTrace<Trace>> {
+		return this.debugTraceTransaction(txHash);
+	}
+
 	async debugTraceTransaction(
 		txHash: Hex,
 		tracer: "callTracer" | "prestateTracer" = "callTracer",
@@ -92,6 +98,26 @@ export class Tenderly implements DebugTraceProvider<Tenderly.DebugTrace> {
 		txHash = Hex.verifyTxHash(txHash);
 		const trace = await this.#request<Tenderly.DebugTraceRaw>("debug_traceTransaction", [txHash, { tracer, onlyTopCall }]);
 		return verifyCallTypes(trace);
+	}
+}
+
+export class TenderlyWithDb extends Tenderly {
+	readonly #ctx: DebugTraceProvider<Trace> & { readonly db: Database };
+
+	constructor(
+		chain: number | ChainName,
+		accessKey: string,
+		db?: Database
+	) {
+		super(chain, accessKey);
+		this.#ctx = {
+			db: db ??= Database.default,
+			getDebugTrace: txHash => super.getDebugTrace(txHash)
+		}
+	}
+
+	override async getDebugTrace(txHash: string): Promise<DebugTrace<Trace>> {
+		return getDebugTraceWithDb.call(this.#ctx, txHash);
 	}
 }
 

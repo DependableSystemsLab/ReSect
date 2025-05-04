@@ -1,6 +1,6 @@
 import type { ChainName } from "../src/config/Chain";
 import { etherscanApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
-import { Tenderly, type DebugTraceProvider } from "../src/providers";
+import { TenderlyWithDb, type DebugTraceProvider } from "../src/providers";
 import { Reentrancy } from "../src/Reentrancy";
 
 interface TestCaseBase {
@@ -34,8 +34,7 @@ describe("Reentrancy Analyzer", () => {
 			if (!provider) {
 				if (!(chain in tenderlyNodeAccessKeys))
 					throw new Error(`No Tenderly access key for ${chain}`);
-				// @ts-ignore
-				provider = new Tenderly(chain, tenderlyNodeAccessKeys[chain]);
+				provider = new TenderlyWithDb(chain, tenderlyNodeAccessKeys[chain]);
 				debugProviders.set(chain, provider);
 			}
 			const analyzer = new Reentrancy.Analyzer(chain, etherscanApiKey, provider);

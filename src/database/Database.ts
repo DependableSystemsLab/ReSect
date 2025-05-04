@@ -8,12 +8,16 @@ import { Hex } from "../utils";
 
 
 export class Database {
-	static readonly default = new Database(typeormConfig);
+	static #default: Database | undefined;
+
+	static get default() {
+		this.#default ??= new Database(typeormConfig);
+		return this.#default;
+	}
 
 	#source: Promisable<DataSource>;
 
-	constructor(options?: DataSourceOptions) {
-		options ??= typeormConfig;
+	constructor(options: DataSourceOptions) {
 		this.#source = new DataSource(options).initialize();
 	}
 

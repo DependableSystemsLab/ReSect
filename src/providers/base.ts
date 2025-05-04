@@ -33,28 +33,25 @@ export type DebugTrace<T extends MinimalTrace = MinimalTrace> = T & {
 }
 
 export interface TraceProvider<T extends MinimalTrace = MinimalTrace> {
-	traceTransaction(txHash: string): Promise<CallTrace<T>[]>;
+	getCallTraces(txHash: string): Promise<CallTrace<T>[]>;
 }
 
 export interface DebugTraceProvider<T extends MinimalTrace = MinimalTrace> {
-	debugTraceTransaction(txHash: string): Promise<DebugTrace<T>>;
+	getDebugTrace(txHash: string): Promise<DebugTrace<T>>;
 }
 
-export abstract class DebugTraceProviderWithDatabase implements DebugTraceProvider<Trace> {
-	protected constructor(protected readonly db: Database) { }
+interface DbContext {
+	readonly db: Database;
+}
 
-	protected abstract _debugTraceTransaction(txHash: string): Promise<DebugTrace<Trace>>;
-
-	public async debugTraceTransaction(txHash: string): Promise<DebugTrace<Trace>> {
-		let result = await this.db.getDebugTrace(txHash);
-		if (result)
-			return result;
-		result = await this._debugTraceTransaction(txHash);
-		await this.db.saveDebugTrace(result, txHash);
+export async function getDebugTraceWithDb(this: DebugTraceProvider<Trace> & DbContext, txHash: string): Promise<DebugTrace<Trace>> {
+	let result = await this.db.getDebugTrace(txHash);
+	if (result)
 		return result;
-	}
+	result = await this.getDebugTrace(txHash);
+	await this.db.saveDebugTrace(result, txHash);
+	return result;
 }
-
 
 export namespace RPC {
 	export interface Response<T = any> {
