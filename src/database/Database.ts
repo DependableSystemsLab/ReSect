@@ -21,40 +21,46 @@ export class Database {
 		this.#source = new DataSource(options).initialize();
 	}
 
-	private verifyPrimaryKey<Entity extends ObjectLiteral>(id: number | string | Partial<Entity>, pks: string[], entityName: string): Partial<Entity> {
-		if (typeof id != "object" && pks.length > 1)
+	#verifyPrimaryKey<Entity extends ObjectLiteral>(
+		id: number | string | Partial<Entity>,
+		pks: (readonly [propertyName: string, columnName: string])[],
+		entityName: string
+	): Record<string, any> {
+		if (typeof id !== "object" && pks.length > 1)
 			throw new Error(`Entity ${entityName} has multiple primary keys`);
-		if (typeof id == "object") {
+		if (typeof id === "object") {
 			const missingKeys: string[] = [];
-			for (const key of pks) {
-				if (id[key] == undefined)
-					missingKeys.push(key);
+			for (const [pName] of pks) {
+				if (id[pName] === undefined)
+					missingKeys.push(pName);
 			}
 			if (missingKeys.length)
 				throw new Error(`Missing primary key(s) for entity ${entityName}: ${missingKeys.join(", ")}`);
 		}
-		const result: Partial<Entity> = {};
-		if (typeof id != "object")
-			// @ts-expect-error
-			result[pks[0]] = id;
+		const result: Record<string, any> = {};
+		if (typeof id !== "object")
+			result[pks[0][1]] = id;
 		else {
-			for (const key of pks)
-				// @ts-expect-error
-				result[key] = id[key];
+			for (const [pName, cName] of pks)
+				result[cName] = id[pName];
 		}
 		return result;
 	}
 
+	async has(entity: EntityTarget<Block>, id: Pick<Block, "blockchainId" | "number">): Promise<boolean>;
+	async has(entity: EntityTarget<CallTrace>, id: Pick<CallTrace, "txHash" | "index">): Promise<boolean>;
+	async has(entity: EntityTarget<Contract>, id: Hex.AddressNP): Promise<boolean>;
+	async has(entity: EntityTarget<Transaction>, id: Hex.TxHashNP): Promise<boolean>;
 	async has<Entity extends ObjectLiteral>(entity: EntityTarget<Entity>, id: number | string): Promise<boolean>;
 	async has<Entity extends ObjectLiteral>(entity: EntityTarget<Entity>, id: Partial<Entity>): Promise<boolean>;
 	async has<Entity extends ObjectLiteral>(entity: EntityTarget<Entity>, id: number | string | Partial<Entity>): Promise<boolean> {
 		const src = await this.#source;
 		const metadata = src.getMetadata(entity);
-		const pks = metadata.primaryColumns.map(col => col.propertyName);
-		const params = this.verifyPrimaryKey(id, pks, metadata.name);
-		const filter = pks.map(k => `"${k}" = :${k}`).join(" AND ");
+		const pks = metadata.primaryColumns.map(col => [col.propertyName, col.databaseName] as const);
+		const params = this.#verifyPrimaryKey(id, pks, metadata.name);
+		const filter = Object.keys(params).map(k => `"${k}" = :${k}`).join(" AND ");
 		return src.createQueryBuilder(entity, metadata.name)
-			.select(`"${pks[0]}"`)
+			.select(`"${pks[0][0]}"`)
 			.where(filter, params)
 			.limit(1)
 			.getRawOne()

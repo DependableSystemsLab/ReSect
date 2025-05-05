@@ -115,11 +115,11 @@ export class TenderlyWithDb extends Tenderly {
 	) {
 		super(chain, accessKey);
 		this.#ctx = {
-			get chainId() { return super.chainId; },
 			db: db ??= Database.default,
 			provider: provider instanceof RPC.ExtendedProvider ? provider : new RPC.ExtendedProvider(provider),
 			getDebugTrace: txHash => super.getDebugTrace(txHash)
-		};
+		} as DbExtensionContext;
+		Object.defineProperty(this.#ctx, "chainId", { get: () => super.chainId });
 	}
 
 	override async getDebugTrace(txHash: Hex.TxHash) {
