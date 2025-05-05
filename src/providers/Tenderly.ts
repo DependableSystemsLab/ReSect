@@ -1,7 +1,7 @@
-import { ChainName, chainNames } from "../config/Chain";
+import { Chain, ChainName, chainNames } from "../config/Chain";
 import { Database } from "../database";
 import { verifyCallTypes, Hex } from "../utils";
-import { getDebugTraceWithDb, type DebugTrace, type Trace, type DebugTraceProvider, type RPC } from "./base";
+import { getDebugTraceWithDb, RPC, type DebugTrace, type Trace, type DebugTraceProvider, type DbExtensionContext } from "./base";
 
 
 const tenderlyNetwork = {
@@ -40,6 +40,9 @@ export class Tenderly implements DebugTraceProvider<DebugTrace<Trace>> {
 
 	get chain(): Tenderly.SupportedNetwork {
 		return this._chain;
+	}
+	get chainId(): number {
+		return Chain[this.chain];
 	}
 	get accessKey(): string {
 		return this._accessKey;
@@ -102,18 +105,21 @@ export class Tenderly implements DebugTraceProvider<DebugTrace<Trace>> {
 }
 
 export class TenderlyWithDb extends Tenderly {
-	readonly #ctx: DebugTraceProvider<Trace> & { readonly db: Database };
+	readonly #ctx: DbExtensionContext;
 
 	constructor(
 		chain: number | ChainName,
 		accessKey: string,
+		provider: RPC.Provider | RPC.ExtendedProvider,
 		db?: Database
 	) {
 		super(chain, accessKey);
 		this.#ctx = {
+			get chainId() { return super.chainId; },
 			db: db ??= Database.default,
+			provider: provider instanceof RPC.ExtendedProvider ? provider : new RPC.ExtendedProvider(provider),
 			getDebugTrace: txHash => super.getDebugTrace(txHash)
-		}
+		};
 	}
 
 	override async getDebugTrace(txHash: string): Promise<DebugTrace<Trace>> {

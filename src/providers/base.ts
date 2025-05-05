@@ -1,5 +1,5 @@
 import type { SetFieldType } from "type-fest";
-import { Database } from "../database";
+import { Block, Database, Transaction } from "../database";
 import { Hex } from "../utils";
 
 export enum CallType {
@@ -43,16 +43,32 @@ export interface DebugTraceProvider<T extends MinimalTrace = MinimalTrace> {
 	getDebugTrace(txHash: string): Promise<DebugTrace<T>>;
 }
 
-interface DbContext {
+export type DbExtensionContext = DebugTraceProvider<Trace> & {
+	readonly chainId: number;
 	readonly db: Database;
+	readonly provider: RPC.ExtendedProvider;
 }
 
-export async function getDebugTraceWithDb(this: DebugTraceProvider<Trace> & DbContext, txHash: string): Promise<DebugTrace<Trace>> {
+export async function getDebugTraceWithDb(this: DbExtensionContext, txHash: string): Promise<DebugTrace<Trace>> {
 	let result = await this.db.getDebugTrace(txHash);
 	if (result)
 		return result;
 	result = await this.getDebugTrace(txHash);
-	await this.db.saveDebugTrace(result, txHash);
+	if (result) {
+		if (!await this.db.has(Transaction, txHash)) {
+			const transaction = await this.provider.getTransactionByHash(txHash);
+			if (transaction == null)
+				throw new Error(`Transaction ${txHash} not found`);
+			if (!await this.db.has(Block, transaction.blockHash)) {
+				const block = await this.provider.getBlockByNumber(transaction.blockNumber, false);
+				if (block == null)
+					throw new Error(`Block ${transaction.blockHash} not found`);
+				await this.db.saveBlock(block, this.chainId);
+			}
+			await this.db.saveTransaction(transaction);
+		}
+		await this.db.saveDebugTrace(result, txHash);
+	}
 	return result;
 }
 
