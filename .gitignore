@@ -2,6 +2,8 @@
 node_modules
 coverage
 dist
+example
 
 *.tsbuildinfo
 .env
+.vscode/settings.json
