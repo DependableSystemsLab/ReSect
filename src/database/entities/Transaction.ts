@@ -21,11 +21,11 @@ export class Transaction {
 	@Column("integer", { name: "blockchain" })
 	blockchainId!: number;
 
-	@Column("integer", { name: "block_number" })
-	blockNumber!: number;
+	@Column("integer", { name: "block_number", nullable: true })
+	blockNumber?: number;
 
-	@Column("integer", { name: "block_index" })
-	blockIndex!: number;
+	@Column("integer", { name: "block_index", nullable: true })
+	blockIndex?: number;
 
 	@Column("character", { length: 40 })
 	sender!: Hex.AddressNP;
@@ -33,7 +33,7 @@ export class Transaction {
 	@Column("character", { length: 40, nullable: true })
 	receiver?: Hex.AddressNP;
 
-	@Column("integer", { name: "associated_attack" })
+	@Column("smallint", { name: "associated_attack", nullable: true })
 	attackId?: number;
 
 	@Column("enum", {

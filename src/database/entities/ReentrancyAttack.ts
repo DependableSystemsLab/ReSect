@@ -1,4 +1,4 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
 import { AttackStrategy } from "./AttackStrategy";
 import { Transaction } from "./Transaction";
 
@@ -26,7 +26,7 @@ enum ReentrancyScope {
 
 @Entity("ReentrancyAttack")
 export class ReentrancyAttack {
-	@PrimaryColumn("integer")
+	@PrimaryGeneratedColumn("increment", { type: "smallint" })
 	id!: number;
 
 	@Column("text")
