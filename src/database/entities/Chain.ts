@@ -7,11 +7,11 @@ export class Chain {
 	id!: number;
 
 	@Column("character varying", { length: 64 })
-	name!: string;
+	name?: string;
 
 	@Column("smallint")
-	layer!: number;
+	layer?: number;
 
 	@Column("character varying", { length: 8 })
-	currency!: string;
+	currency?: string;
 }

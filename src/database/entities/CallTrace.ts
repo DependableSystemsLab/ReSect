@@ -15,43 +15,47 @@ export class CallTrace {
 	index!: number;
 
 	@Column("smallint")
-	depth!: number;
+	depth?: number;
 
 	@Column("character", { length: 40 })
-	from!: Hex.AddressNP;
+	from?: Hex.AddressNP;
 
 	@Column("character", { length: 40 })
-	to!: Hex.AddressNP;
+	to?: Hex.AddressNP;
 
 	@Column("enum", {
 		enum: CallType,
 		enumName: "CallType",
 	})
-	type!: CallType;
+	type?: CallType;
 
-	@Column("numeric", { precision: 31, scale: 0 })
-	value?: bigint;
+	@Column("numeric", {
+		precision: 31,
+		scale: 0,
+		nullable: true
+	})
+	value?: bigint | null;
 
 	@Column("bigint")
-	gas!: bigint;
+	gas?: bigint;
 
 	@Column("bigint", { name: "gas_used" })
-	gasUsed!: bigint;
+	gasUsed?: bigint;
+
+	@Column("bytea")
+	input?: Buffer;
 
 	@Column("bytea", { nullable: true })
-	input!: Buffer;
-
-	@Column("bytea", { nullable: true })
-	output?: Buffer;
+	output?: Buffer | null;
 
 	@Column("text", { nullable: true })
-	error?: string;
+	error?: string | null;
 
 	@Column("integer", {
 		name: "parent_index",
 		nullable: true
 	})
-	parentIndex?: number;
+	parentIndex?: number | null;
 
 	@ManyToOne(
 		() => Transaction,
@@ -70,7 +74,7 @@ export class CallTrace {
 		{ name: "tx_hash", referencedColumnName: "txHash" },
 		{ name: "parent_index", referencedColumnName: "index" }
 	])
-	parent?: CallTrace;
+	parent?: CallTrace | null;
 
 	@OneToMany(
 		() => CallTrace,
@@ -79,46 +83,52 @@ export class CallTrace {
 	)
 	children?: CallTrace[];
 
-	get levelIndex(): number {
-		return this.parentIndex === undefined
-			? this.index
-			: this.index - this.parentIndex - 1;
+	get levelIndex(): number | undefined {
+		return this.parentIndex === undefined ? undefined
+			: this.parentIndex === null ? this.index
+				: this.index - this.parentIndex - 1;
 	}
 
-	get selector(): Hex.Selector | undefined {
-		if (this.input === undefined || this.input.length < 4)
+	get selector(): Hex.Selector | null | undefined {
+		if (this.input === undefined || this.type === undefined)
 			return undefined;
+		if (this.input.length < 4)
+			return null;
 		if (this.type.endsWith("CALL") || this.type === CallType.CALLCODE)
 			return ("0x" + this.input.toString("hex", 0, 4)) as Hex.Selector;
-		return undefined;
+		return null;
 	}
 
-	get stack(): number[] {
-		const result: number[] = [this.levelIndex];
-		let parent: CallTrace | undefined = this.parent;
+	get stack(): number[] | undefined {
+		const levelIdx = this.levelIndex;
+		if (levelIdx === undefined)
+			return undefined;
+		const result: number[] = [levelIdx];
+		let parent: CallTrace | null | undefined = this.parent;
 		while (parent) {
-			result.push(parent.levelIndex);
+			const levelIdx = parent.levelIndex;
+			if (levelIdx === undefined)
+				return undefined;
+			result.push(levelIdx);
 			parent = parent.parent;
 		}
 		return result.reverse();
 	}
 
-	get inputAsHex(): Hex.String {
-		return `0x${this.input.toString("hex")}`;
+	get inputAsHex(): Hex.String | undefined {
+		return this.input ? `0x${this.input.toString("hex")}` : undefined;
 	}
 	set inputAsHex(value: Hex) {
 		value = Hex.toString(value);
 		this.input = Buffer.from(Hex.removePrefix(value), "hex");
 	}
 
-	get outputAsHex(): Hex.String | undefined {
-		if (this.output === undefined)
-			return undefined;
-		return `0x${this.output.toString("hex")}`;
+	get outputAsHex(): Hex.String | null | undefined {
+		return this.output == null ? this.output : `0x${this.output.toString("hex")}`;
 	}
-	set outputAsHex(value: Hex | undefined) {
-		if (value === undefined)
-			this.output = undefined;
+	set outputAsHex(value: Hex | null) {
+		if (value == null)
+			this.output = null;
 		else {
 			value = Hex.toString(value);
 			this.output = Buffer.from(Hex.removePrefix(value), "hex");

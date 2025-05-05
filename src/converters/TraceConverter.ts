@@ -76,6 +76,8 @@ export namespace TraceConverter {
 			throw new Error("Invalid array of call traces: index mismatch");
 		for (const entity of entities) {
 			if (entity.parentIndex === undefined)
+				throw new Error("parentIndex not set");
+			if (entity.parentIndex === null)
 				continue;
 			const parent = entities[entity.parentIndex];
 			parent.children ??= [];
@@ -102,13 +104,19 @@ export namespace TraceConverter {
 	}
 
 	function _setTraceFromEntity(trace: Trace, entity: Entity): Trace {
-		trace.from = `0x${entity.from}`;
-		trace.to = `0x${entity.to}`;
-		trace.type = entity.type;
-		trace.input = entity.inputAsHex;
-		trace.gas = Hex.toString(entity.gas);
-		trace.gasUsed = Hex.toString(entity.gasUsed);
-		if (entity.value !== undefined)
+		if (entity.from)
+			trace.from = `0x${entity.from}`;
+		if (entity.to)
+			trace.to = `0x${entity.to}`;
+		if (entity.type)
+			trace.type = entity.type;
+		if (entity.input)
+			trace.input = entity.inputAsHex!;
+		if (entity.gas)
+			trace.gas = Hex.toString(entity.gas);
+		if (entity.gasUsed)
+			trace.gasUsed = Hex.toString(entity.gasUsed);
+		if (entity.value)
 			trace.value = Hex.toString(entity.value);
 		if (entity.output)
 			trace.output = `0x${entity.output.toString("hex")}`;
@@ -119,11 +127,11 @@ export namespace TraceConverter {
 
 	function* _debugTraceToEntities(
 		debugTrace: DebugTrace<Trace>,
-		depth: number, levelIndex: number, parentIndex: number | undefined
+		depth: number, levelIndex: number, parentIndex: number | null
 	): Generator<Entity> {
 		const trace = new Entity();
 		trace.parentIndex = parentIndex;
-		trace.index = parentIndex === undefined ? levelIndex : parentIndex + levelIndex + 1;
+		trace.index = parentIndex === null ? levelIndex : parentIndex + levelIndex + 1;
 		trace.depth = depth;
 		_setEntityFromTrace(trace, debugTrace);
 		yield trace;
@@ -137,7 +145,7 @@ export namespace TraceConverter {
 
 	export function debugTraceToEntities(debugTrace: DebugTrace<Trace>, txHash: Hex.String): Entity[] {
 		const hash = Hex.removePrefix(Hex.verifyTxHash(txHash));
-		const traces = Array.from(_debugTraceToEntities(debugTrace, 0, 0, undefined));
+		const traces = Array.from(_debugTraceToEntities(debugTrace, 0, 0, null));
 		for (const trace of traces)
 			trace.txHash = hash;
 		return traces;
@@ -160,8 +168,11 @@ export namespace TraceConverter {
 		entities = buildEntityHierarchy(entities);
 		return entities.map(entity => {
 			const trace = {} as CallTrace<Trace>;
+			const stack = entity.stack;
+			if (stack === undefined)
+				throw new Error("Parent chain incomplete");
+			trace.traceAddress = stack;
 			_setTraceFromEntity(trace, entity);
-			trace.traceAddress = entity.stack;
 			return trace;
 		});
 	}

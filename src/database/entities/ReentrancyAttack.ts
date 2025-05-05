@@ -30,23 +30,23 @@ export class ReentrancyAttack {
 	id!: number;
 
 	@Column("text")
-	name!: string;
+	name?: string;
 
 	@Column("enum", {
 		enum: ReentrancyType,
 		enumName: "AttackType",
 	})
-	type!: ReentrancyAttack.Type;
+	type?: ReentrancyAttack.Type;
 
 	@Column("money", { nullable: true })
-	loss?: number;
+	loss?: number | null;
 
 	@Column("enum", {
 		enum: ReentrancyScope,
 		enumName: "ReentrancyScope",
 		nullable: true
 	})
-	scope?: ReentrancyAttack.Scope;
+	scope?: ReentrancyAttack.Scope | null;
 
 	@Column("enum", {
 		name: "entry_point",
@@ -54,23 +54,23 @@ export class ReentrancyAttack {
 		enumName: "EntryPoint",
 		nullable: true
 	})
-	entryPoint?: ReentrancyAttack.EntryPoint;
+	entryPoint?: ReentrancyAttack.EntryPoint | null;
 
 	@Column("integer", { name: "erc_standard", nullable: true })
-	ercStandard?: number;
+	ercStandard?: number | null;
 
 	@Column("integer", { name: "strategy", nullable: true })
-	strategyId?: number;
+	strategyId?: number | null;
 
 	@Column("text", { nullable: true })
-	origin?: string;
+	origin?: string | null;
 
 	@ManyToOne(
 		() => AttackStrategy,
 		{ persistence: false }
 	)
 	@JoinColumn({ name: "strategy" })
-	strategy?: AttackStrategy;
+	strategy?: AttackStrategy | null;
 
 	@OneToMany(
 		() => Transaction,

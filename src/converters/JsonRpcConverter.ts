@@ -25,7 +25,7 @@ export namespace JsonRpcConverter {
 		entity.sender = Hex.removePrefix(transaction.from);
 		entity.receiver = Hex.removePrefix(transaction.to);
 		if (entity.receiver === "")
-			entity.receiver = undefined;
+			entity.receiver = null;
 		return entity;
 	}
 }

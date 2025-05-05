@@ -11,26 +11,27 @@ export class Contract {
 	address!: Hex.AddressNP;
 
 	@Column("bytea", { nullable: true })
-	code?: Buffer;
+	code?: Buffer | null;
 
 	@Column("character", {
 		name: "creation_tx_hash",
-		length: 64, nullable: true
+		length: 64,
+		nullable: true
 	})
-	creationTxHash!: Hex.TxHashNP;
+	creationTxHash?: Hex.TxHashNP | null;
 
 	@Column("character", {
 		length: 40,
 		nullable: true
 	})
-	creator!: Hex.AddressNP;
+	creator?: Hex.AddressNP | null;
 
 	@Column("character", {
 		name: "contract_factory",
 		length: 40,
 		nullable: true
 	})
-	contractFactory?: Hex.AddressNP;
+	contractFactory?: Hex.AddressNP | null;
 
 	@ManyToOne(
 		() => Transaction,
@@ -38,36 +39,23 @@ export class Contract {
 		{ persistence: false }
 	)
 	@JoinColumn({ name: "creation_tx_hash" })
-	creationTransaction?: Transaction;
-
-	@ManyToOne(
-		() => Contract,
-		a => a.createdContracts,
-		{ persistence: false }
-	)
-	@JoinColumn({ name: "creator" })
-	creatorAddress?: Contract;
+	creationTransaction?: Transaction | null;
 
 	@ManyToOne(
 		() => Contract,
 		{ persistence: false }
 	)
 	@JoinColumn({ name: "contract_factory" })
-	contractFactoryAddress?: Contract;
-
-	@OneToMany(
-		() => Contract,
-		a => a.creatorAddress,
-		{ persistence: false }
-	)
-	createdContracts?: Contract[];
+	contractFactoryAddress?: Contract | null;
 
 	get chain(): Chain | undefined {
 		return this.creationTransaction?.block?.chain;
 	}
 
-	get creationBlock(): Block | undefined {
-		return this.creationTransaction?.block;
+	get creationBlock(): Block | null | undefined {
+		return this.creationTransaction == null
+			? this.creationTransaction
+			: this.creationTransaction.block;
 	}
 
 	constructor();

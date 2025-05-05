@@ -13,28 +13,28 @@ export class Block {
 
 	@Column("character", { length: 64 })
 	@Index({ unique: true })
-	hash!: Hex.BlockHashNP;
+	hash?: Hex.BlockHashNP;
 
 	@Column("character", { length: 64, name: "parent_hash" })
-	parentHash!: Hex.BlockHashNP;
+	parentHash?: Hex.BlockHashNP;
 
 	@Column("timestamp")
-	timestamp!: Date;
+	timestamp?: Date;
 
 	@Column("bigint", { name: "gas_limit" })
-	gasLimit!: bigint;
+	gasLimit?: bigint;
 
 	@Column("bigint", { name: "gas_used" })
-	gasUsed!: bigint;
+	gasUsed?: bigint;
 
 	@Column("bigint", { name: "base_fee_per_gas", nullable: true })
-	baseFeePerGas?: bigint;
+	baseFeePerGas?: bigint | null;
 
 	@Column("character", { length: 40 })
-	miner!: Hex.AddressNP;
+	miner?: Hex.AddressNP;
 
 	@Column("integer")
-	size!: number;
+	size?: number;
 
 	@ManyToOne(
 		() => Chain,

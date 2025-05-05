@@ -42,14 +42,14 @@ describe("Database", () => {
 
 		await txs.forEachAsync(async (tx, idx) => {
 			const transaction = await etherscan.geth
-				.getTransactionByHash(`0x${tx.hash}`, tx.chainId)
+				.getTransactionByHash(`0x${tx.hash}`, tx.chainId!)
 				.catch(handleError);
 			if (transaction == null)
 				return;
 			console.log(`Fetched tx ${idx + 1}/${txs.length}: ${transaction.hash}`);
 			tx.blockNumber = Hex.toNumber(transaction.blockNumber);
 			tx.blockIndex = Hex.toNumber(transaction.transactionIndex);
-			const number = BigInt(tx.blockNumber) * base + BigInt(tx.chainId);
+			const number = BigInt(tx.blockNumber) * base + BigInt(tx.chainId!);
 			blockNumbers.add(number);
 		});
 

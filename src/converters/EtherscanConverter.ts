@@ -25,7 +25,8 @@ export namespace EtherscanConverter {
 		const block = entity.creationBlock;
 		if (block) {
 			creation.blockNumber = block.number.toString() as NumStr;
-			creation.timestamp = (block.timestamp.getTime() / 1000).toString() as NumStr;
+			if (block.timestamp)
+				creation.timestamp = (block.timestamp.getTime() / 1000).toString() as NumStr;
 		}
 		return creation;
 	}

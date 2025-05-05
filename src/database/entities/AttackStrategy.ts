@@ -7,20 +7,20 @@ export class AttackStrategy {
 	id!: number;
 
 	@Column("character varying", { length: 64 })
-	name!: string;
+	name?: string;
 
 	@Column("smallint", { name: "parent", nullable: true })
-	parentId?: number;
+	parentId?: number | null;
 
 	@Column("text", { nullable: true })
-	description?: string;
+	description?: string | null;
 
 	@OneToMany(
 		() => AttackStrategy,
 		strategy => strategy.parentStrategy,
 		{ persistence: false }
 	)
-	subStrategies!: AttackStrategy[];
+	subStrategies?: AttackStrategy[];
 
 	@ManyToOne(
 		() => AttackStrategy,
@@ -28,5 +28,5 @@ export class AttackStrategy {
 		{ persistence: false }
 	)
 	@JoinColumn({ name: "parent" })
-	parentStrategy?: AttackStrategy;
+	parentStrategy?: AttackStrategy | null;
 }

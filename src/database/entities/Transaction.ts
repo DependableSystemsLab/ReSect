@@ -20,22 +20,22 @@ export class Transaction {
 	hash!: Hex.TxHashNP;
 
 	@Column("integer", { name: "chain" })
-	chainId!: number;
+	chainId?: number;
 
 	@Column("integer", { name: "block_number", nullable: true })
-	blockNumber?: number;
+	blockNumber?: number | null;
 
 	@Column("integer", { name: "block_index", nullable: true })
-	blockIndex?: number;
+	blockIndex?: number | null;
 
 	@Column("character", { length: 40 })
-	sender!: Hex.AddressNP;
+	sender?: Hex.AddressNP;
 
 	@Column("character", { length: 40, nullable: true })
-	receiver?: Hex.AddressNP;
+	receiver?: Hex.AddressNP | null;
 
 	@Column("smallint", { name: "associated_attack", nullable: true })
-	attackId?: number;
+	attackId?: number | null;
 
 	@Column("enum", {
 		enum: TransactionAction,
@@ -43,7 +43,7 @@ export class Transaction {
 		nullable: true,
 		array: true
 	})
-	actions?: Transaction.Action[];
+	actions?: Transaction.Action[] | null;
 
 	@ManyToOne(
 		() => Chain,
@@ -60,7 +60,7 @@ export class Transaction {
 		{ name: "chain", referencedColumnName: "chainId" },
 		{ name: "block_number", referencedColumnName: "number" }
 	])
-	block?: Block;
+	block?: Block | null;
 
 	@ManyToOne(
 		() => ReentrancyAttack,
@@ -68,7 +68,7 @@ export class Transaction {
 		{ persistence: false }
 	)
 	@JoinColumn({ name: "associated_attack" })
-	attack?: ReentrancyAttack;
+	attack?: ReentrancyAttack | null;
 
 	@OneToMany(
 		() => CallTrace,
@@ -84,8 +84,8 @@ export class Transaction {
 	)
 	createdContracts?: Contract[];
 
-	get timestamp(): Date | undefined {
-		return this.block?.timestamp;
+	get timestamp(): Date | null | undefined {
+		return this.block == null ? this.block : this.block.timestamp;
 	}
 
 	constructor();
