@@ -42,4 +42,13 @@ export class Block {
 	)
 	@JoinColumn({ name: "blockchain", referencedColumnName: "id" })
 	blockchain?: Blockchain;
+
+	constructor();
+	constructor(number: number, blockchainId: number);
+	constructor(number?: number, blockchainId?: number) {
+		if (number != undefined && blockchainId != undefined) {
+			this.number = number;
+			this.blockchainId = blockchainId;
+		}
+	}
 }

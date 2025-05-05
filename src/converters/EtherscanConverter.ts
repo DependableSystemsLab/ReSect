@@ -4,8 +4,7 @@ import { Hex, type NumStr } from "../utils";
 
 export namespace EtherscanConverter {
 	export function contractCreationToEntity(creation: Etherscan.ContractCreation): Contract {
-		const entity = new Contract();
-		entity.address = Hex.removePrefix(creation.contractAddress);
+		const entity = new Contract(creation.contractAddress);
 		entity.creationTxHash = Hex.removePrefix(creation.txHash);
 		entity.creator = Hex.removePrefix(creation.contractCreator);
 		if (creation.contractFactory !== "")

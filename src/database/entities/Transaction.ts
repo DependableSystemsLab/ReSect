@@ -1,5 +1,5 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-import type { Hex } from "../../utils";
+import { Hex } from "../../utils";
 import { Contract } from "./Contract";
 import { Block } from "./Block";
 import { CallTrace } from "./CallTrace";
@@ -78,6 +78,13 @@ export class Transaction {
 
 	get timestamp(): Date | undefined {
 		return this.block?.timestamp;
+	}
+
+	constructor();
+	constructor(txHash: Hex.TxHashNP | Hex.TxHash);
+	constructor(txHash?: Hex.TxHashNP | Hex.TxHash) {
+		if (txHash !== undefined)
+			this.hash = Hex.removePrefix(txHash);
 	}
 }
 

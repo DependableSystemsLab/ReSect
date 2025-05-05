@@ -1,5 +1,5 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-import type { Hex } from "../../utils";
+import { Hex } from "../../utils";
 import { Transaction } from "./Transaction";
 import type { Block } from "./Block";
 import type { Blockchain } from "./Blockchain";
@@ -67,5 +67,12 @@ export class Contract {
 
 	get creationBlock(): Block | undefined {
 		return this.creationTransaction?.block;
+	}
+
+	constructor();
+	constructor(address: Hex.AddressNP | Hex.Address);
+	constructor(address?: Hex.AddressNP | Hex.Address) {
+		if (address !== undefined)
+			this.address = Hex.removePrefix(address);
 	}
 }
