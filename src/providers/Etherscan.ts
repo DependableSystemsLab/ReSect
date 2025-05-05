@@ -3,11 +3,12 @@ import { createThrottledFetch } from "fetch-throttler";
 import { Arrayable } from "type-fest";
 import { toURLSearchParams, Hex, type QueryObject, type NumStr } from "../utils";
 import type { RPC } from "./base";
+import type { EtherscanApiKey } from "../config/credentials";
 import type { Database } from "../database";
 
 
 const fetchInstances = new Map<string, typeof fetch>();
-function getFetch(apiKey: string | readonly [key: string, tier: Etherscan.APITier]) {
+function getFetch(apiKey: string | Readonly<EtherscanApiKey>) {
 	const [key, tier = Etherscan.APITier.Free] = typeof apiKey == "string" ? [apiKey] : apiKey;
 	let fetchInst = fetchInstances.get(key);
 	if (!fetchInst) {
@@ -43,7 +44,7 @@ export class Etherscan {
 	readonly geth: Etherscan.Geth;
 
 	constructor(
-		apiKey: string | readonly [key: string, tier: Etherscan.APITier],
+		apiKey: string | Readonly<EtherscanApiKey>,
 		chainId: number = 1,
 		database?: Database
 	) {
@@ -308,7 +309,7 @@ export namespace Etherscan {
 		readonly apiKey: string;
 
 		constructor(
-			apiKey: string | readonly [key: string, tier: Etherscan.APITier],
+			apiKey: string | Readonly<EtherscanApiKey>,
 			public chainId: number = 1
 		) {
 			[this.apiKey, this.#fetch] = getFetch(apiKey);

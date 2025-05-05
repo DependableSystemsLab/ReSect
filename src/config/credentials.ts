@@ -11,7 +11,7 @@ if (!etherscanApiKey_)
 if (!/^[A-Z\d]{34}$/.test(etherscanApiKey_))
 	throw new Error(`Invalid ETHERSCAN_API_KEY: ${etherscanApiKey_}`);
 
-const apiTire: Etherscan.APITier = (() => {
+const apiTier: Etherscan.APITier = (() => {
 	switch (etherscanApiTier.toLowerCase()) {
 		case "free": return Etherscan.APITier.Free;
 		case "standard": return Etherscan.APITier.Standard;
@@ -22,10 +22,8 @@ const apiTire: Etherscan.APITier = (() => {
 	}
 })();
 
-export const etherscanApiKey = Object.freeze([
-	etherscanApiKey_,
-	apiTire
-] as const);
+export type EtherscanApiKey = [key: string, tier?: Etherscan.APITier];
+export const etherscanApiKey = Object.freeze([etherscanApiKey_, apiTier] as EtherscanApiKey);
 
 const tenderlyKeyPrefix = "TENDERLY_ACCESS_KEY_";
 const tenderlyKeys = Object.keys(process.env)
@@ -42,5 +40,5 @@ const tenderlyKeys = Object.keys(process.env)
 		return [chain as ChainName, value] as const;
 	})
 
-export const tenderlyNodeAccessKeys =
-	Object.freeze(Object.fromEntries(tenderlyKeys)) satisfies Readonly<Partial<Record<ChainName, string>>>;
+export type TenderlyApiKeys = Readonly<Partial<Record<ChainName, string>>>;
+export const tenderlyNodeAccessKeys: TenderlyApiKeys = Object.freeze(Object.fromEntries(tenderlyKeys));
