@@ -1,6 +1,6 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
 import type { Hex } from "../../utils";
-import { Blockchain } from "./Blockchain";
+import { Chain } from "./Chain";
 
 
 @Entity("Block")
@@ -8,8 +8,8 @@ export class Block {
 	@PrimaryColumn("integer")
 	number!: number;
 
-	@PrimaryColumn("integer", { name: "blockchain" })
-	blockchainId!: number;
+	@PrimaryColumn("integer", { name: "chain" })
+	chainId!: number;
 
 	@Column("character", { length: 64 })
 	@Index({ unique: true })
@@ -37,18 +37,18 @@ export class Block {
 	size!: number;
 
 	@ManyToOne(
-		() => Blockchain,
+		() => Chain,
 		{ persistence: false }
 	)
-	@JoinColumn({ name: "blockchain", referencedColumnName: "id" })
-	blockchain?: Blockchain;
+	@JoinColumn({ name: "chain" })
+	chain?: Chain;
 
 	constructor();
-	constructor(number: number, blockchainId: number);
-	constructor(number?: number, blockchainId?: number) {
-		if (number != undefined && blockchainId != undefined) {
+	constructor(number: number, chainId: number);
+	constructor(number?: number, chainId?: number) {
+		if (number != undefined && chainId != undefined) {
 			this.number = number;
-			this.blockchainId = blockchainId;
+			this.chainId = chainId;
 		}
 	}
 }

@@ -1,8 +1,8 @@
 import { Column, Entity, PrimaryColumn } from "typeorm";
 
 
-@Entity("Blockchain")
-export class Blockchain {
+@Entity("Chain")
+export class Chain {
 	@PrimaryColumn("integer")
 	id!: number;
 

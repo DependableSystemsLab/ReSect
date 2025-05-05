@@ -18,7 +18,7 @@ export namespace JsonRpcConverter {
 
 	export function transactionToEntity(transaction: RPC.Transaction): Transaction {
 		const entity = new Transaction(transaction.hash);
-		entity.blockchainId = Hex.toNumber(transaction.chainId);
+		entity.chainId = Hex.toNumber(transaction.chainId);
 		entity.blockNumber = Hex.toNumber(transaction.blockNumber);
 		entity.blockIndex = Hex.toNumber(transaction.transactionIndex);
 		entity.sender = Hex.removePrefix(transaction.from);

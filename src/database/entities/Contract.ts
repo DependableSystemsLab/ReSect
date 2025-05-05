@@ -1,8 +1,9 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 import { Hex } from "../../utils";
-import { Transaction } from "./Transaction";
 import type { Block } from "./Block";
-import type { Blockchain } from "./Blockchain";
+import type { Chain } from "./Chain";
+import { Transaction } from "./Transaction";
+
 
 @Entity("Contract")
 export class Contract {
@@ -61,8 +62,8 @@ export class Contract {
 	)
 	createdContracts?: Contract[];
 
-	get blockchain(): Blockchain | undefined {
-		return this.creationTransaction?.block?.blockchain;
+	get chain(): Chain | undefined {
+		return this.creationTransaction?.block?.chain;
 	}
 
 	get creationBlock(): Block | undefined {

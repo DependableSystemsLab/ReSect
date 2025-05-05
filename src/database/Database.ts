@@ -47,7 +47,7 @@ export class Database {
 		return result;
 	}
 
-	async has(entity: EntityTarget<Block>, id: Pick<Block, "blockchainId" | "number">): Promise<boolean>;
+	async has(entity: EntityTarget<Block>, id: Pick<Block, "chainId" | "number">): Promise<boolean>;
 	async has(entity: EntityTarget<CallTrace>, id: Pick<CallTrace, "txHash" | "index">): Promise<boolean>;
 	async has(entity: EntityTarget<Contract>, id: Hex.AddressNP): Promise<boolean>;
 	async has(entity: EntityTarget<Transaction>, id: Hex.TxHashNP): Promise<boolean>;

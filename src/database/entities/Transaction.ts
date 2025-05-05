@@ -1,5 +1,6 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 import { Hex } from "../../utils";
+import { Chain } from "./Chain";
 import { Contract } from "./Contract";
 import { Block } from "./Block";
 import { CallTrace } from "./CallTrace";
@@ -18,8 +19,8 @@ export class Transaction {
 	@PrimaryColumn("character", { length: 64 })
 	hash!: Hex.TxHashNP;
 
-	@Column("integer", { name: "blockchain" })
-	blockchainId!: number;
+	@Column("integer", { name: "chain" })
+	chainId!: number;
 
 	@Column("integer", { name: "block_number", nullable: true })
 	blockNumber?: number;
@@ -45,11 +46,18 @@ export class Transaction {
 	actions?: Transaction.Action[];
 
 	@ManyToOne(
+		() => Chain,
+		{ persistence: false }
+	)
+	@JoinColumn({ name: "chain" })
+	chain?: Chain;
+
+	@ManyToOne(
 		() => Block,
 		{ persistence: false }
 	)
 	@JoinColumn([
-		{ name: "blockchain", referencedColumnName: "blockchainId" },
+		{ name: "chain", referencedColumnName: "chainId" },
 		{ name: "block_number", referencedColumnName: "number" }
 	])
 	block?: Block;
