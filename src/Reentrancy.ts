@@ -2,7 +2,7 @@ import { whatsabi, type providers, type AutoloadConfig } from "@shazow/whatsabi"
 import "basic-type-extensions";
 import { Etherscan, type RPC, type DebugTraceProvider } from "./providers";
 import { Chain, type ChainName } from "./config/Chain";
-import { CallType, Counter, Hex, splitInput, type DebugTrace, type MinimalTrace } from "./utils";
+import { CallType, Counter, Hex, extractSelector, type DebugTrace, type MinimalTrace } from "./utils";
 
 export namespace Reentrancy {
 	interface ContractInfo {
@@ -308,7 +308,9 @@ export namespace Reentrancy {
 					else if (hasLabel(trace, Label.VictimIn)) {
 						const targetTrace = traces[victimOutIdx - 1];
 						const scope = trace.to !== targetTrace.to ? Scope.CrossContract
-							: trace.selector !== targetTrace.selector ? Scope.CrossFunction : Scope.SingleFunction;
+							: extractSelector(trace) !== extractSelector(targetTrace)
+								? Scope.CrossFunction
+								: Scope.SingleFunction;
 						if (scope < result.scope)
 							result.scope = scope;
 						victimOutIdx = -1;

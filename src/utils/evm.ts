@@ -61,13 +61,11 @@ export function verifyCallTypes<T extends TypeUnverifiedDebugTrace>(debugTrace: 
 	return debugTrace as TypeVerifiedDebugTrace<T>;
 }
 
-export function splitInput(input: Hex | undefined): [selector?: string, parameter?: string] {
-	input = input ? Hex.removePrefix(Hex.toString(input)) : "";
-	if (input === "")
-		return [undefined, undefined];
+export function extractSelector(trace: { type: CallType, input: Hex }): string | undefined {
+	const input = Hex.removePrefix(Hex.toString(trace.input));
+	if (input === "" || !trace.type.startsWith("CALL") && trace.type !== CallType.CALLCODE)
+		return undefined;
 	if (input.length < 8)
 		throw new TypeError(`Invalid input: ${input}`);
-	return input.length == 8
-		? ["0x" + input, undefined]
-		: ["0x" + input.substring(0, 8), "0x" + input.substring(8)];
+	return `0x${input.slice(0, 8)}`;
 }
