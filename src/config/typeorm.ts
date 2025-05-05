@@ -1,4 +1,5 @@
-import { DefaultNamingStrategy, type DataSourceOptions, type NamingStrategyInterface, type Table } from "typeorm";
+import { DefaultNamingStrategy, type NamingStrategyInterface, type Table } from "typeorm";
+import type { PostgresConnectionOptions } from "typeorm/driver/postgres/PostgresConnectionOptions.js";
 import { entities } from "../database/entities";
 
 const {
@@ -44,7 +45,7 @@ class NamingStrategy extends DefaultNamingStrategy implements NamingStrategyInte
 	}
 }
 
-export const typeormConfig: DataSourceOptions = {
+export const typeormConfig: PostgresConnectionOptions = {
 	type: "postgres",
 	host,
 	port: parseInt(port),
