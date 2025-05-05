@@ -1,4 +1,4 @@
-import { Address } from "./Address";
+import { Contract } from "./Contract";
 import { AttackStrategy } from "./AttackStrategy";
 import { Blockchain } from "./Blockchain";
 import { CallTrace } from "./CallTrace";
@@ -7,7 +7,7 @@ import { Transaction } from "./Transaction";
 import { Block } from "./Block";
 
 export const entities = Object.freeze([
-	Address,
+	Contract,
 	AttackStrategy,
 	Blockchain,
 	Block,
@@ -16,7 +16,7 @@ export const entities = Object.freeze([
 	Transaction
 ]);
 
-export * from "./Address";
+export * from "./Contract";
 export * from "./AttackStrategy";
 export * from "./Blockchain";
 export * from "./Block";

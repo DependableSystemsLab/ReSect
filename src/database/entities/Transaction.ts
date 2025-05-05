@@ -1,5 +1,5 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-import { Address } from "./Address";
+import { Contract } from "./Contract";
 import { Block } from "./Block";
 import { CallTrace } from "./CallTrace";
 import { ReentrancyAttack } from "./ReentrancyAttack";
@@ -69,11 +69,11 @@ export class Transaction {
 	traces?: CallTrace[];
 
 	@OneToMany(
-		() => Address,
+		() => Contract,
 		a => a.creationTransaction,
 		{ persistence: false }
 	)
-	createdContracts?: Address[];
+	createdContracts?: Contract[];
 
 	get timestamp(): Date | undefined {
 		return this.block?.timestamp;

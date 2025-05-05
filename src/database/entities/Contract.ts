@@ -1,41 +1,33 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 import { Transaction } from "./Transaction";
+import type { Block } from "./Block";
+import type { Blockchain } from "./Blockchain";
 
-
-@Entity("Address")
-export class Address {
+@Entity("Contract")
+export class Contract {
 	@PrimaryColumn("character", { length: 40 })
 	address!: string;
 
-	@Column("boolean", { name: "is_contract" })
-	isContract!: boolean;
-
-	@Column("text", { nullable: true })
-	code?: string;
-
-	@Column("integer", {
-		name: "creation_block",
-		nullable: true
-	})
-	creationBlock?: number;
+	@Column("bytea", { nullable: true })
+	code?: Buffer;
 
 	@Column("character", {
 		name: "creation_tx_hash",
 		length: 64, nullable: true
 	})
-	creationTxHash?: string;
+	creationTxHash!: string;
 
 	@Column("character", {
 		length: 40,
 		nullable: true
 	})
-	creator?: string;
+	creator!: string;
 
 	@Column("character", {
 		name: "contract_factory",
 		length: 40, nullable: true
 	})
-	contractFactory?: string;
+	contractFactory!: string;
 
 	@ManyToOne(
 		() => Transaction,
@@ -46,24 +38,32 @@ export class Address {
 	creationTransaction?: Transaction;
 
 	@ManyToOne(
-		() => Address,
+		() => Contract,
 		a => a.createdContracts,
 		{ persistence: false }
 	)
 	@JoinColumn({ name: "creator" })
-	creatorAddress?: Address;
+	creatorAddress?: Contract;
 
 	@ManyToOne(
-		() => Address,
+		() => Contract,
 		{ persistence: false }
 	)
 	@JoinColumn({ name: "contract_factory" })
-	contractFactoryAddress?: Address;
+	contractFactoryAddress?: Contract;
 
 	@OneToMany(
-		() => Address,
+		() => Contract,
 		a => a.creatorAddress,
 		{ persistence: false }
 	)
-	createdContracts?: Address[];
+	createdContracts?: Contract[];
+
+	get blockchain(): Blockchain | undefined {
+		return this.creationTransaction?.block?.blockchain;
+	}
+
+	get creationBlock(): Block | undefined {
+		return this.creationTransaction?.block;
+	}
 }
