@@ -1,8 +1,8 @@
 import { whatsabi, type providers, type AutoloadConfig } from "@shazow/whatsabi";
 import "basic-type-extensions";
-import { CallType, Etherscan, type RPC, type DebugTrace, type DebugTraceProvider } from "./providers";
+import { Etherscan, type RPC, type DebugTraceProvider } from "./providers";
 import { Chain, type ChainName } from "./config/Chain";
-import { Counter, Hex, splitInput } from "./utils";
+import { CallType, Counter, Hex, splitInput, type DebugTrace, type MinimalTrace } from "./utils";
 
 export namespace Reentrancy {
 	interface ContractInfo {

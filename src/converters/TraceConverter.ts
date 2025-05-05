@@ -1,7 +1,6 @@
 import "basic-type-extensions";
 import { CallTrace as Entity } from "../database";
-import type { CallTrace, DebugTrace, MinimalTrace, Trace } from "../providers";
-import { Hex } from "../utils";
+import { Hex, type CallTrace, type DebugTrace, type MinimalTrace, type Trace } from "../utils";
 
 export namespace TraceConverter {
 	function compareCallTraces(a: CallTrace, b: CallTrace): number {

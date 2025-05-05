@@ -3,8 +3,8 @@ import { DataSource, In, type DataSourceOptions, type EntityTarget, type ObjectL
 import { Block, CallTrace, Contract, Transaction } from "./entities";
 import { typeormConfig } from "../config/typeorm";
 import { EtherscanConverter, JsonRpcConverter, TraceConverter } from "../converters";
-import type { DebugTrace, Etherscan, RPC, Trace } from "../providers";
-import { Hex } from "../utils";
+import type { Etherscan, RPC } from "../providers";
+import { Hex, type Trace, type DebugTrace } from "../utils";
 
 
 export class Database {

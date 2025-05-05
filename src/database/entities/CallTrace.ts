@@ -1,7 +1,6 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-import { CallType } from "../../providers";
 import { Transaction } from "./Transaction";
-import { Hex } from "../../utils";
+import { Hex, CallType } from "../../utils";
 
 
 @Entity("CallTrace")

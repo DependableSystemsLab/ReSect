@@ -1,39 +1,6 @@
 import type { SetFieldType } from "type-fest";
 import { Block, Database, Transaction } from "../database";
-import { Hex } from "../utils";
-
-export enum CallType {
-	CALL = "CALL",
-	STATICCALL = "STATICCALL",
-	DELEGATECALL = "DELEGATECALL",
-	CALLCODE = "CALLCODE",
-	CREATE = "CREATE",
-	CREATE2 = "CREATE2",
-	SELFDESTRUCT = "SELFDESTRUCT"
-}
-
-export interface MinimalTrace {
-	from: string;
-	to: string;
-	type: CallType;
-	input: string;
-}
-
-export interface Trace extends MinimalTrace {
-	output?: string;
-	value?: string;
-	gas: string;
-	gasUsed: string;
-	error?: string;
-}
-
-export type CallTrace<T extends MinimalTrace = MinimalTrace> = T & {
-	traceAddress: number[];
-}
-
-export type DebugTrace<T extends MinimalTrace = MinimalTrace> = T & {
-	calls?: DebugTrace<T>[];
-}
+import { Hex, type CallTrace, type DebugTrace, type MinimalTrace, type Trace } from "../utils";
 
 export interface TraceProvider<T extends MinimalTrace = MinimalTrace> {
 	getCallTraces(txHash: string): Promise<CallTrace<T>[]>;

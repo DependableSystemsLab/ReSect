@@ -1,7 +1,7 @@
 import { Chain, ChainName, chainNames } from "../config/Chain";
 import { Database } from "../database";
-import { verifyCallTypes, Hex } from "../utils";
-import { getDebugTraceWithDb, RPC, type DebugTrace, type Trace, type DebugTraceProvider, type DbExtensionContext } from "./base";
+import { verifyCallTypes, Hex, type Trace, type DebugTrace } from "../utils";
+import { getDebugTraceWithDb, RPC, type DebugTraceProvider, type DbExtensionContext } from "./base";
 
 
 const tenderlyNetwork = {

@@ -1,15 +1,36 @@
-import { CallType } from "../providers/base";
 import { Hex } from "./hex";
 
-export function splitInput(input: Hex | undefined): [selector?: string, parameter?: string] {
-	input = input ? Hex.removePrefix(Hex.toString(input)) : "";
-	if (input === "")
-		return [undefined, undefined];
-	if (input.length < 8)
-		throw new TypeError(`Invalid input: ${input}`);
-	return input.length == 8
-		? ["0x" + input, undefined]
-		: ["0x" + input.substring(0, 8), "0x" + input.substring(8)];
+export enum CallType {
+	CALL = "CALL",
+	STATICCALL = "STATICCALL",
+	DELEGATECALL = "DELEGATECALL",
+	CALLCODE = "CALLCODE",
+	CREATE = "CREATE",
+	CREATE2 = "CREATE2",
+	SELFDESTRUCT = "SELFDESTRUCT"
+}
+
+export interface MinimalTrace {
+	from: string;
+	to: string;
+	type: CallType;
+	input: string;
+}
+
+export interface Trace extends MinimalTrace {
+	output?: string;
+	value?: string;
+	gas: string;
+	gasUsed: string;
+	error?: string;
+}
+
+export type CallTrace<T extends MinimalTrace = MinimalTrace> = T & {
+	traceAddress: number[];
+}
+
+export type DebugTrace<T extends MinimalTrace = MinimalTrace> = T & {
+	calls?: DebugTrace<T>[];
 }
 
 export function toCallType(type: string): CallType {
@@ -38,4 +59,15 @@ export function verifyCallTypes<T extends TypeUnverifiedDebugTrace>(debugTrace: 
 			verifyCallTypes(call);
 	}
 	return debugTrace as TypeVerifiedDebugTrace<T>;
+}
+
+export function splitInput(input: Hex | undefined): [selector?: string, parameter?: string] {
+	input = input ? Hex.removePrefix(Hex.toString(input)) : "";
+	if (input === "")
+		return [undefined, undefined];
+	if (input.length < 8)
+		throw new TypeError(`Invalid input: ${input}`);
+	return input.length == 8
+		? ["0x" + input, undefined]
+		: ["0x" + input.substring(0, 8), "0x" + input.substring(8)];
 }
