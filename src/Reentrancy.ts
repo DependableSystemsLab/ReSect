@@ -236,6 +236,8 @@ export namespace Reentrancy {
 			}
 			const creations = await this.etherscan.getContractCreation(contracts);
 			for (const creation of creations) {
+				if (creation === undefined)
+					continue;
 				const info = result.get(creation.contractAddress)! as ContractInfo;
 				info.creationBlock = Number.parseInt(creation.blockNumber);
 				info.creationTxHash = creation.txHash;

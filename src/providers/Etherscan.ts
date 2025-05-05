@@ -3,6 +3,7 @@ import { createThrottledFetch } from "fetch-throttler";
 import { Arrayable } from "type-fest";
 import { toURLSearchParams, Hex, type QueryObject } from "../utils";
 import type { RPC } from "./base";
+import type { Database } from "../database";
 
 
 const fetchInstances = new Map<string, typeof fetch>();
@@ -35,18 +36,22 @@ export class Etherscan {
 	static readonly BASE_URL = "https://api.etherscan.io/v2/api";
 
 	#chainId: number = 1;
-	#fetch: typeof fetch;
+	readonly #db: Database | undefined;
+	readonly #fetch: typeof fetch;
 
 	readonly apiKey: string;
 	readonly geth: Etherscan.Geth;
 
 	constructor(
 		apiKey: string | readonly [key: string, tier: Etherscan.APITier],
-		chainId: number = 1
+		chainId: number = 1,
+		database?: Database
 	) {
 		this.#chainId = chainId;
 		[this.apiKey, this.#fetch] = getFetch(apiKey);
 		this.geth = new Etherscan.Geth(apiKey, chainId);
+		if (database)
+			this.#db = database;
 	}
 
 	get chainId() {
@@ -148,17 +153,37 @@ export class Etherscan {
 		);
 	}
 
-	async getContractCreation(contractAddresses: Arrayable<Hex>, chain?: number): Promise<Etherscan.ContractCreation[]> {
+	async getContractCreation(contractAddresses: Arrayable<Hex>, chain?: number): Promise<(Etherscan.ContractCreation | undefined)[]> {
 		if (!Array.isArray(contractAddresses))
 			contractAddresses = [contractAddresses];
-		if (contractAddresses.length <= 5)
-			return await this.#request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses });
-		const slices = new Array(Math.ceil(contractAddresses.length / 5));
-		for (let i = 0; i < contractAddresses.length; i += 5)
-			slices[i / 5] = contractAddresses.slice(i, i + 5);
-		return await slices.mapAsync(
-			slice => this.#request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses: slice })
-		).then(results => results.flat());
+		const addresses = contractAddresses.map(Hex.verifyAddress);
+		const results = new Map<string, Etherscan.ContractCreation>();
+		if (this.#db) {
+			await this.#db.getContracts(addresses)
+				.then(cs => cs.forEach(c => results.set(c.contractAddress, c)));
+			if (results.size === addresses.length)
+				return addresses.map(a => results.get(a));
+			contractAddresses = addresses.filter(c => !results.has(c));
+		}
+		if (contractAddresses.length <= 5) {
+			await this.#request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses })
+				.then(rs => rs.forEach(c => results.set(c.contractAddress, c)));
+		}
+		else {
+			const slices = new Array(Math.ceil(contractAddresses.length / 5));
+			for (let i = 0; i < contractAddresses.length; i += 5)
+				slices[i / 5] = contractAddresses.slice(i, i + 5);
+			await slices.forEachAsync(slice => {
+				this.#request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses: slice })
+					.then(rs => rs.forEach(c => results.set(c.contractAddress, c)));
+			});
+		}
+		if (this.#db) {
+			const newCreations = contractAddresses.map(c => results.get(c as string)).filter(c => c !== undefined);
+			if (newCreations.length > 0)
+				await this.#db.saveContracts(newCreations);
+		}
+		return addresses.map(a => results.get(a));
 	}
 
 	getLogs(address: Hex, topics?: string[], topicOpr?: "and" | "or", blockRange?: Etherscan.BlockRange, pagination?: Etherscan.Pagination, chain?: number): Promise<any[]>;

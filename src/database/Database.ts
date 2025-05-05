@@ -1,9 +1,9 @@
 import { Promisable } from "type-fest";
-import { DataSource, type DataSourceOptions, type EntityTarget, type ObjectLiteral } from "typeorm";
-import { Block, CallTrace, Transaction } from "./entities";
+import { DataSource, In, type DataSourceOptions, type EntityTarget, type ObjectLiteral } from "typeorm";
+import { Block, CallTrace, Contract, Transaction } from "./entities";
 import { typeormConfig } from "../config/typeorm";
-import { JsonRpcConverter, TraceConverter } from "../converters";
-import type { DebugTrace, RPC, Trace } from "../providers";
+import { EtherscanConverter, JsonRpcConverter, TraceConverter } from "../converters";
+import type { DebugTrace, Etherscan, RPC, Trace } from "../providers";
 import { Hex } from "../utils";
 
 
@@ -68,6 +68,22 @@ export class Database {
 		return source.manager.getRepository(entity);
 	}
 
+	async getContracts(addresses: Hex[]): Promise<Etherscan.ContractCreation[]> {
+		const repo = await this.getRepository(Contract);
+		addresses = addresses.map(Hex.toString);
+		const entities = await repo.find({
+			where: { address: In(addresses) },
+			relations: { creationBlock: true }
+		});
+		return entities.map(EtherscanConverter.entityToContractCreation);
+	}
+
+	async saveContracts(contracts: Etherscan.ContractCreation[]): Promise<Contract[]> {
+		const repo = await this.getRepository(Contract);
+		const entities = contracts.map(EtherscanConverter.contractCreationToEntity);
+		return await repo.save(entities);
+	}
+
 	async saveBlock(block: RPC.Block, chainId: number): Promise<Block> {
 		const repo = await this.getRepository(Block);
 		const entity = JsonRpcConverter.blockToEntity(block, chainId);
@@ -78,12 +94,6 @@ export class Database {
 		const repo = await this.getRepository(Transaction);
 		const entity = JsonRpcConverter.transactionToEntity(transaction);
 		return await repo.save(entity);
-	}
-
-	async saveDebugTrace(trace: DebugTrace<Trace>, txHash: Hex): Promise<CallTrace[]> {
-		const traces = TraceConverter.debugTraceToEntities(trace, txHash);
-		const manager = await this.getRepository(CallTrace);
-		return await manager.save(traces);
 	}
 
 	async getDebugTrace(txHash: Hex): Promise<DebugTrace<Trace> | undefined> {
@@ -98,5 +108,11 @@ export class Database {
 			return undefined;
 		const topTrace = TraceConverter.buildEntityHierarchy(traces, false)[0];
 		return TraceConverter.entityToDebugTrace(topTrace);
+	}
+
+	async saveDebugTrace(trace: DebugTrace<Trace>, txHash: Hex): Promise<CallTrace[]> {
+		const traces = TraceConverter.debugTraceToEntities(trace, txHash);
+		const manager = await this.getRepository(CallTrace);
+		return await manager.save(traces);
 	}
 }
