@@ -1,4 +1,5 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
+import type { Hex } from "../../utils";
 import { Transaction } from "./Transaction";
 import type { Block } from "./Block";
 import type { Blockchain } from "./Blockchain";
@@ -6,7 +7,7 @@ import type { Blockchain } from "./Blockchain";
 @Entity("Contract")
 export class Contract {
 	@PrimaryColumn("character", { length: 40 })
-	address!: string;
+	address!: Hex.AddressNP;
 
 	@Column("bytea", { nullable: true })
 	code?: Buffer;
@@ -15,19 +16,20 @@ export class Contract {
 		name: "creation_tx_hash",
 		length: 64, nullable: true
 	})
-	creationTxHash!: string;
+	creationTxHash!: Hex.TxHashNP;
 
 	@Column("character", {
 		length: 40,
 		nullable: true
 	})
-	creator!: string;
+	creator!: Hex.AddressNP;
 
 	@Column("character", {
 		name: "contract_factory",
-		length: 40, nullable: true
+		length: 40,
+		nullable: true
 	})
-	contractFactory!: string;
+	contractFactory?: Hex.AddressNP;
 
 	@ManyToOne(
 		() => Transaction,

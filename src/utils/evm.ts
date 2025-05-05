@@ -11,17 +11,17 @@ export enum CallType {
 }
 
 export interface MinimalTrace {
-	from: string;
-	to: string;
+	from: Hex.Address;
+	to: Hex.Address;
 	type: CallType;
-	input: string;
+	input: Hex.String;
 }
 
 export interface Trace extends MinimalTrace {
-	output?: string;
-	value?: string;
-	gas: string;
-	gasUsed: string;
+	output?: Hex.String;
+	value?: Hex.String;
+	gas: Hex.String;
+	gasUsed: Hex.String;
 	error?: string;
 }
 

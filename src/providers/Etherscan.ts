@@ -1,7 +1,7 @@
 import "basic-type-extensions";
 import { createThrottledFetch } from "fetch-throttler";
 import { Arrayable } from "type-fest";
-import { toURLSearchParams, Hex, type QueryObject } from "../utils";
+import { toURLSearchParams, Hex, type QueryObject, type NumStr } from "../utils";
 import type { RPC } from "./base";
 import type { Database } from "../database";
 
@@ -140,20 +140,22 @@ export class Etherscan {
 	}
 
 	getTransactionsByAddress(
-		address: Hex,
+		address: Hex.String,
 		blockRange: Etherscan.BlockRange = "all",
 		pagination?: Etherscan.Pagination,
 		chain?: number
 	): Promise<Etherscan.TransactionByAddress[]> {
-		address = Hex.verifyAddress(address);
-		const params = { address, sort: "asc" };
+		const params = {
+			address: Hex.verifyAddress(address),
+			sort: "asc"
+		};
 		Etherscan.#setBlockRange(params, blockRange);
 		return this.#requestWithPagination<Etherscan.TransactionByAddress[]>(
 			"account", "txlist", chain, params, pagination
 		);
 	}
 
-	async getContractCreation(contractAddresses: Arrayable<Hex>, chain?: number): Promise<(Etherscan.ContractCreation | undefined)[]> {
+	async getContractCreation(contractAddresses: Arrayable<Hex.String>, chain?: number): Promise<(Etherscan.ContractCreation | undefined)[]> {
 		if (!Array.isArray(contractAddresses))
 			contractAddresses = [contractAddresses];
 		const addresses = contractAddresses.map(Hex.verifyAddress);
@@ -186,18 +188,18 @@ export class Etherscan {
 		return addresses.map(a => results.get(a));
 	}
 
-	getLogs(address: Hex, topics?: string[], topicOpr?: "and" | "or", blockRange?: Etherscan.BlockRange, pagination?: Etherscan.Pagination, chain?: number): Promise<any[]>;
-	getLogs(topics: string[], address?: Hex, topicOpr?: "and" | "or", blockRange?: Etherscan.BlockRange, pagination?: Etherscan.Pagination, chain?: number): Promise<any[]>;
+	getLogs(address: Hex.String, topics?: string[], topicOpr?: "and" | "or", blockRange?: Etherscan.BlockRange, pagination?: Etherscan.Pagination, chain?: number): Promise<any[]>;
+	getLogs(topics: string[], address?: Hex.String, topicOpr?: "and" | "or", blockRange?: Etherscan.BlockRange, pagination?: Etherscan.Pagination, chain?: number): Promise<any[]>;
 	getLogs(
-		param1: Hex | string[],
-		param2?: string[] | Hex,
+		param1: Hex.String | string[],
+		param2?: string[] | Hex.String,
 		topicOpr: "and" | "or" = "and",
 		blockRange: Etherscan.BlockRange = "all",
 		pagination?: Etherscan.Pagination,
 		chain?: number
 	): Promise<Etherscan.Log[]> {
 		let [address, topics] = Array.isArray(param1)
-			? [param2 as Hex | undefined, param1]
+			? [param2 as Hex.String | undefined, param1]
 			: [param1, param2 as string[] | undefined];
 		if (topics) {
 			if (!Array.isArray(topics) || topics.length == 0 || topics.length > 4)
@@ -239,7 +241,7 @@ export namespace Etherscan {
 
 	export type BlockRange = [startBlock?: number, endBlock?: number] | "all";
 	export type Pagination = [page?: number, offset?: number] | "all";
-	export type Topics = [topic0: string, topic1?: string, topic2?: string, topic3?: string];
+	export type Topics = [topic0: Hex.Topic, topic1?: Hex.Topic, topic2?: Hex.Topic, topic3?: Hex.Topic];
 
 	export interface Response<T = any> {
 		status: string;
@@ -248,55 +250,55 @@ export namespace Etherscan {
 	}
 
 	export interface TransactionByAddress {
-		blockNumber: string;
-		timeStamp: string;
-		hash: string;
-		nonce: string;
-		blockHash: string;
-		transactionIndex: string;
-		from: string;
-		to: string;
-		value: string;
-		gas: string;
-		gasPrice: string;
-		isError: "0" | "1"
-		txreceipt_status: string;
-		input: string;
-		contractAddress: string;
-		cumulativeGasUsed: string;
-		gasUsed: string;
-		confirmations: string;
-		methodId: string;
+		blockNumber: NumStr;
+		timeStamp: NumStr;
+		hash: Hex.TxHash;
+		nonce: NumStr;
+		blockHash: Hex.BlockHash;
+		transactionIndex: NumStr;
+		from: Hex.Address;
+		to: Hex.Address | "";
+		value: NumStr;
+		gas: NumStr;
+		gasPrice: NumStr;
+		isError: "0" | "1";
+		txreceipt_status: "0" | "1";
+		input: Hex.String;
+		contractAddress: Hex.Address | "";
+		cumulativeGasUsed: NumStr;
+		gasUsed: NumStr;
+		confirmations: NumStr;
+		methodId: Hex.Selector;
 		functionName: string;
 	}
 
 	export interface ContractCreation {
-		contractAddress: string;
+		contractAddress: Hex.Address;
 		/**
 		 * EOA address of the sender of the transaction within which the contract was created.
 		 */
-		contractCreator: string;
-		txHash: string;
-		blockNumber: string;
-		timestamp: string;
+		contractCreator: Hex.Address;
+		txHash: Hex.TxHash;
+		blockNumber: NumStr;
+		timestamp: NumStr;
 		/**
 		 * The address of the other contract that sent the creation bytecode, if applicable.
 		 */
-		contractFactory: string;
-		creationBytecode: string;
+		contractFactory: Hex.Address | "";
+		creationBytecode: Hex.String;
 	}
 
 	export interface Log {
-		address: string;
+		address: Hex.Address;
 		topics: Topics;
-		data: string;
-		blockNumber: string;
-		timeStamp: string;
-		gasPrice: string;
-		gasUsed: string;
-		logIndex: string;
-		transactionHash: string;
-		transactionIndex: string;
+		data: Hex.String;
+		blockNumber: Hex.String;
+		timeStamp: Hex.String;
+		gasPrice: Hex.String;
+		gasUsed: Hex.String;
+		logIndex: Hex.String;
+		transactionHash: Hex.TxHash;
+		transactionIndex: Hex.String;
 	}
 }
 
@@ -347,21 +349,21 @@ export namespace Etherscan {
 			throw new Error(`Unsupported block tag: ${tag}`);
 		}
 
-		blockNumber(chain?: number): Promise<string> {
-			return this.#request<string>("eth_blockNumber", chain);
+		blockNumber(chain?: number) {
+			return this.#request<Hex.String>("eth_blockNumber", chain);
 		}
 
-		getBlockByNumber(blockNumber: RPC.BlockNumber, full: boolean, chain?: number): Promise<RPC.Block> {
+		getBlockByNumber(blockNumber: RPC.BlockNumber, full: boolean, chain?: number) {
 			return this.#request<RPC.Block>("eth_getBlockByNumber", chain, { tag: blockNumber, boolean: full });
 		}
 
-		getTransactionByHash(hash: string, chain?: number): Promise<RPC.Transaction> {
+		getTransactionByHash(hash: Hex.TxHash, chain?: number) {
 			return this.#request<RPC.Transaction>("eth_getTransactionByHash", chain, { txhash: hash });
 		}
 
-		call(request: RPC.CallRequest, tag: RPC.BlockNumber, chain?: number): Promise<string> {
+		call(request: RPC.CallRequest, tag: RPC.BlockNumber, chain?: number) {
 			tag = this.#verifyBlockTag(tag);
-			return this.#request<string>("eth_call", chain, {
+			return this.#request<Hex.String>("eth_call", chain, {
 				from: request.from,
 				to: request.to,
 				data: request.input,
@@ -372,13 +374,13 @@ export namespace Etherscan {
 			});
 		}
 
-		getCode(address: string, tag: RPC.BlockNumber, chain?: number): Promise<string> {
+		getCode(address: Hex.Address, tag: RPC.BlockNumber, chain?: number) {
 			tag = this.#verifyBlockTag(tag);
-			return this.#request<string>("eth_getCode", chain, { address, tag });
+			return this.#request<Hex.String>("eth_getCode", chain, { address, tag });
 		}
 
-		getStorageAt(address: string, position: string, tag: RPC.BlockNumber, chain?: number): Promise<string> {
-			return this.#request<string>("eth_getStorageAt", chain, { address, position, tag });
+		getStorageAt(address: Hex.Address, position: Hex.String, tag: RPC.BlockNumber, chain?: number) {
+			return this.#request<Hex.String>("eth_getStorageAt", chain, { address, position, tag });
 		}
 	}
 }

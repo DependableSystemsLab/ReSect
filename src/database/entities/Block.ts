@@ -1,4 +1,5 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
+import type { Hex } from "../../utils";
 import { Blockchain } from "./Blockchain";
 
 
@@ -12,10 +13,10 @@ export class Block {
 
 	@Column("character", { length: 64 })
 	@Index({ unique: true })
-	hash!: string;
+	hash!: Hex.BlockHashNP;
 
 	@Column("character", { length: 64, name: "parent_hash" })
-	parentHash!: string;
+	parentHash!: Hex.BlockHashNP;
 
 	@Column("timestamp")
 	timestamp!: Date;
@@ -30,7 +31,7 @@ export class Block {
 	baseFeePerGas?: bigint;
 
 	@Column("character", { length: 40 })
-	miner!: string;
+	miner!: Hex.AddressNP;
 
 	@Column("integer")
 	size!: number;

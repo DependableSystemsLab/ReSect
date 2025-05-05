@@ -89,16 +89,16 @@ export class Tenderly implements DebugTraceProvider<DebugTrace<Trace>> {
 		return json.result;
 	}
 
-	getDebugTrace(txHash: string): Promise<DebugTrace<Trace>> {
+	getDebugTrace(txHash: Hex.String): Promise<DebugTrace<Trace>> {
 		return this.debugTraceTransaction(txHash);
 	}
 
 	async debugTraceTransaction(
-		txHash: Hex,
+		txHash: Hex.String,
 		tracer: "callTracer" | "prestateTracer" = "callTracer",
 		onlyTopCall = false
 	): Promise<DebugTrace<Trace>> {
-		txHash = Hex.verifyTxHash(txHash);
+		Hex.verifyTxHash(txHash);
 		const trace = await this.#request<Tenderly.DebugTraceRaw>("debug_traceTransaction", [txHash, { tracer, onlyTopCall }]);
 		return verifyCallTypes(trace);
 	}
@@ -122,7 +122,7 @@ export class TenderlyWithDb extends Tenderly {
 		};
 	}
 
-	override async getDebugTrace(txHash: string): Promise<DebugTrace<Trace>> {
+	override async getDebugTrace(txHash: Hex.TxHash) {
 		return getDebugTraceWithDb.call(this.#ctx, txHash);
 	}
 }

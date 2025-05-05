@@ -68,11 +68,11 @@ export class Database {
 		return source.manager.getRepository(entity);
 	}
 
-	async getContracts(addresses: Hex[]): Promise<Etherscan.ContractCreation[]> {
+	async getContracts(addresses: Hex.String[]): Promise<Etherscan.ContractCreation[]> {
+		const addrs = addresses.map(a => Hex.removePrefix(Hex.verifyAddress(a)));
 		const repo = await this.getRepository(Contract);
-		addresses = addresses.map(Hex.toString);
 		const entities = await repo.find({
-			where: { address: In(addresses) },
+			where: { address: In(addrs) },
 			relations: { creationBlock: true }
 		});
 		return entities.map(EtherscanConverter.entityToContractCreation);
@@ -96,11 +96,11 @@ export class Database {
 		return await repo.save(entity);
 	}
 
-	async getDebugTrace(txHash: Hex): Promise<DebugTrace<Trace> | undefined> {
+	async getDebugTrace(txHash: Hex.String): Promise<DebugTrace<Trace> | undefined> {
+		const hash = Hex.removePrefix(Hex.verifyTxHash(txHash));
 		const repo = await this.getRepository(CallTrace);
-		txHash = Hex.toString(txHash);
 		const traces = await repo.find({
-			where: { txHash },
+			where: { txHash: hash },
 			relations: undefined,
 			order: { index: "ASC" }
 		});
@@ -110,7 +110,7 @@ export class Database {
 		return TraceConverter.entityToDebugTrace(topTrace);
 	}
 
-	async saveDebugTrace(trace: DebugTrace<Trace>, txHash: Hex): Promise<CallTrace[]> {
+	async saveDebugTrace(trace: DebugTrace<Trace>, txHash: Hex.TxHash): Promise<CallTrace[]> {
 		const traces = TraceConverter.debugTraceToEntities(trace, txHash);
 		const manager = await this.getRepository(CallTrace);
 		return await manager.save(traces);

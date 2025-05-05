@@ -171,9 +171,18 @@ export namespace Reentrancy {
 			const chainId = Chain[chain];
 			const whatsabiConfig: AutoloadConfig = {
 				provider: {
-					getCode: address => this.#rpcProvider.getCode(address, "latest"),
-					getStorageAt: (address, slot) => this.#rpcProvider.getStorageAt(address, Hex.verify(slot), "latest"),
-					call: ({ to, data }) => this.#rpcProvider.call({ to, input: data }, "latest"),
+					getCode: address => {
+						const addr = Hex.verifyAddress(Hex.addPrefix(address))
+						return this.#rpcProvider.getCode(addr, "latest");
+					},
+					getStorageAt: (address, slot) => {
+						const addr = Hex.verifyAddress(Hex.addPrefix(address))
+						return this.#rpcProvider.getStorageAt(addr, Hex.toString(slot), "latest");
+					},
+					call: ({ to, data }) => {
+						const toAddr = Hex.verifyAddress(Hex.addPrefix(to))
+						return this.#rpcProvider.call({ to: toAddr, input: Hex.verify(data) }, "latest");
+					},
 					getAddress: () => { throw new Error("Not implemented"); },
 				} satisfies providers.Provider,
 				abiLoader: new whatsabi.loaders.EtherscanV2ABILoader({ apiKey: etherscan.apiKey, chainId })
@@ -182,7 +191,7 @@ export namespace Reentrancy {
 			this.#rpcProvider = rpcProvider ??= etherscan.geth;
 		}
 
-		static #getAllAddresses(callTrace: DebugTrace, set: Set<string>) {
+		static #getAllAddresses(callTrace: DebugTrace, set: Set<Hex.Address>) {
 			set.add(callTrace.from);
 			set.add(callTrace.to);
 			if (callTrace.calls?.length) {
@@ -191,8 +200,8 @@ export namespace Reentrancy {
 			}
 		}
 
-		static getAllAddresses(callTrace: DebugTrace): Set<string> {
-			const set = new Set<string>();
+		static getAllAddresses(callTrace: DebugTrace): Set<Hex.Address> {
+			const set = new Set<Hex.Address>();
 			this.#getAllAddresses(callTrace, set);
 			return set;
 		}
@@ -217,11 +226,11 @@ export namespace Reentrancy {
 		}
 
 		async getAddressInfos(callTrace: DebugTrace): Promise<Map<string, AddressInfo>> {
-			const result = new Map<string, AddressInfo>();
+			const result = new Map<Hex.Address, AddressInfo>();
 			const addresses = Analyzer.getAllAddresses(callTrace);
 			result.set(callTrace.from, { address: callTrace.from, isContract: false });
 			addresses.delete(callTrace.from);
-			const contracts = new Array<string>();
+			const contracts = new Array<Hex.Address>();
 			for (const address of addresses) {
 				const code = await this.#rpcProvider.getCode(address, "latest");
 				const info = {
@@ -248,8 +257,8 @@ export namespace Reentrancy {
 			return result;
 		}
 
-		async *analyze(txHash: Hex): AsyncGenerator<AnalysisResult> {
-			const rawTrace = await this.traceProvider.getDebugTrace(Hex.toString(txHash));
+		async *analyze(txHash: Hex.String): AsyncGenerator<AnalysisResult> {
+			const rawTrace = await this.traceProvider.getDebugTrace(Hex.verifyTxHash(txHash));
 			const callTrace = Analyzer.toAnnotatedTrace(rawTrace);
 			const infos = await this.getAddressInfos(callTrace);
 			const sender = callTrace.from;

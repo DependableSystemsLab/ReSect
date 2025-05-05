@@ -135,11 +135,11 @@ export namespace TraceConverter {
 		}
 	}
 
-	export function debugTraceToEntities(debugTrace: DebugTrace<Trace>, txHash: Hex): Entity[] {
-		txHash = Hex.toString(txHash);
+	export function debugTraceToEntities(debugTrace: DebugTrace<Trace>, txHash: Hex.String): Entity[] {
+		const hash = Hex.removePrefix(Hex.verifyTxHash(txHash));
 		const traces = Array.from(_debugTraceToEntities(debugTrace, 0, 0, undefined));
 		for (const trace of traces)
-			trace.txHash = txHash;
+			trace.txHash = hash;
 		return traces;
 	}
 
@@ -151,7 +151,7 @@ export namespace TraceConverter {
 		return trace;
 	}
 
-	export function callTracesToEntities(callTraces: CallTrace<Trace>[], txHash: Hex, sort: boolean = true): Entity[] {
+	export function callTracesToEntities(callTraces: CallTrace<Trace>[], txHash: Hex.String, sort: boolean = true): Entity[] {
 		const debugTrace = callTracesToDebugTrace(callTraces, true, sort);
 		return debugTraceToEntities(debugTrace, txHash);
 	}

@@ -1,10 +1,27 @@
+import type { Tagged } from "type-fest";
+
 export namespace Hex {
-	export function addPrefix(hex: string): string {
-		return hex.startsWith("0x") ? hex : "0x" + hex;
+	export type String = `0x${string}`;
+	export type Number = number | bigint;
+
+	export type Empty = "0x";
+	export type AddressNP = Tagged<string, "address" | 40>;
+	export type Address = `0x${AddressNP}`;
+	export type TxHashNP = Tagged<string, "txhash" | 64>;
+	export type TxHash = `0x${TxHashNP}`;
+	export type BlockHashNP = Tagged<string, "blockhash" | 64>;
+	export type BlockHash = `0x${BlockHashNP}`;
+	export type Topic = Tagged<String, "topic" | 64>;
+	export type Selector = Tagged<String, "selector" | 8>;
+
+	type AddPrefix<T extends string> = T extends String ? T : `0x${T}`;
+	export function addPrefix<T extends string = string>(hex: T): AddPrefix<T> {
+		return (hex.startsWith("0x") ? hex : `0x${hex}`) as AddPrefix<T>;
 	}
 
-	export function removePrefix(hex: string): string {
-		return hex.startsWith("0x") ? hex.substring(2) : hex;
+	type RemovePrefix<T extends string> = T extends `0x${infer U}` ? U : T;
+	export function removePrefix<T extends string = string>(hex: T): RemovePrefix<T> {
+		return (hex.startsWith("0x") ? hex.slice(2) : hex) as RemovePrefix<T>;
 	}
 
 	export function getPattern(length?: number | [min?: number, max?: number], prefix: boolean = true): RegExp {
@@ -16,58 +33,72 @@ export namespace Hex {
 	export const pattern = getPattern();
 
 	const hexPatternWithoutPrefix = getPattern(undefined, false);
-	export function toString(hex: Hex, byteLength?: number): string {
+	export function toString(hex: Hex | string, byteLength?: number): String {
 		if (typeof hex === "string") {
 			if (byteLength === undefined) {
 				hex = addPrefix(hex);
 				if (!pattern.test(hex))
 					throw new TypeError(`Invalid hex value: ${hex}`);
-				return hex;
+				return hex as String;
 			}
-			hex = removePrefix(hex);
-			if (!hexPatternWithoutPrefix.test(hex))
+			let noPrefix = removePrefix(hex);
+			if (!hexPatternWithoutPrefix.test(noPrefix))
 				throw new TypeError(`Invalid hex value: ${hex}`);
 			const strLength = byteLength << 1;
-			if (strLength > hex.length)
-				hex = hex.padStart(strLength, "0");
-			else if (strLength < hex.length) {
-				const prefix = hex.substring(0, hex.length - strLength);
+			if (strLength > noPrefix.length)
+				noPrefix = noPrefix.padStart(strLength, "0");
+			else if (strLength < noPrefix.length) {
+				const prefix = noPrefix.slice(0, -strLength);
 				if (Number.parseInt(prefix, 16) !== 0)
 					throw new TypeError(`Hex value longer than ${byteLength} bytes: ${hex}`);
-				hex = hex.substring(hex.length - strLength);
+				noPrefix = noPrefix.slice(-strLength);
 			}
-			return addPrefix(hex);
+			return addPrefix(noPrefix);
 		}
-		if (typeof hex !== "number" && typeof hex !== "bigint")
-			throw new TypeError(`Invalid hex value: ${hex}`);
-		hex = hex.toString(16);
-		if (byteLength !== undefined) {
-			const strLength = byteLength << 1;
-			if (strLength < hex.length)
+		if (typeof hex === "number" || typeof hex === "bigint") {
+			let str = hex.toString(16);
+			if (byteLength !== undefined) {
+				const strLength = byteLength << 1;
+				if (strLength < str.length)
+					throw new TypeError(`Hex value longer than ${byteLength} bytes: ${hex}`);
+				str = str.padStart(strLength, "0");
+			}
+			return `0x${str}`;
+		}
+		if (Buffer.isBuffer(hex)) {
+			if (byteLength === undefined || byteLength === hex.length)
+				return `0x${hex.toString("hex")}`;
+			if (byteLength < hex.length)
 				throw new TypeError(`Hex value longer than ${byteLength} bytes: ${hex}`);
-			hex = hex.padStart(strLength, "0");
+			return `0x${"00".repeat(byteLength - hex.length)}${hex.toString("hex")}`;
 		}
-		return `0x${hex}`;
-	}
-
-	export function toBigInt(hex: Hex): bigint {
-		if (typeof hex === "bigint")
-			return hex;
-		if (typeof hex === "number")
-			return BigInt(hex);
-		if (typeof hex === "string")
-			return BigInt(toString(hex));
 		throw new TypeError(`Invalid hex value: ${hex}`);
 	}
 
-	export function toNumber(hex: Hex): number {
+	export function toBigInt(hex: Hex | string): bigint {
+		switch (typeof hex) {
+			case "bigint": return hex;
+			case "number": return BigInt(hex);
+			case "string": return BigInt(toString(hex));
+			default:
+				if (Buffer.isBuffer(hex))
+					return BigInt(`0x${hex.toString("hex")}`);
+				throw new TypeError(`Invalid hex value: ${hex}`);
+		}
+	}
+
+	export function toNumber(hex: Hex | string): number {
 		if (typeof hex === "number")
 			return hex;
-		let num: number;
+		let num: number = 0;
 		if (typeof hex === "bigint")
 			num = Number(hex);
 		else if (typeof hex === "string")
 			num = Number(toString(hex));
+		else if (Buffer.isBuffer(hex)) {
+			for (const byte of hex)
+				num = (num << 8) | byte;
+		}
 		else
 			throw new TypeError(`Invalid hex value: ${hex}`);
 		if (!Number.isSafeInteger(num))
@@ -75,32 +106,27 @@ export namespace Hex {
 		return num;
 	}
 
-	export function verify(hexNumber: Hex): string {
-		try {
-			return toString(hexNumber);
-		}
-		catch {
-			throw new Error(`Invalid hex number: ${hexNumber}`);
-		}
+	export function verify(hex: string): String {
+		if (!pattern.test(hex))
+			throw new TypeError(`Invalid hex value: ${hex}`);
+		return hex as String;
 	}
 
-	export function verifyAddress(address: Hex): string {
-		try {
-			return toString(address, 20);
-		}
-		catch {
+	const addressPattern = getPattern(40);
+	export function verifyAddress(address: String): Address {
+		if (!addressPattern.test(address))
 			throw new Error(`Invalid address: ${address}`);
-		}
+		return address as Address;
 	}
 
-	export function verifyTxHash(hash: Hex): string {
-		try {
-			return toString(hash, 32);
-		}
-		catch {
+	const hashPattern = getPattern(64);
+	export function verifyTxHash(hash: String): TxHash {
+		if (!hashPattern.test(hash))
 			throw new Error(`Invalid txhash: ${hash}`);
-		}
+		return hash as TxHash;
 	}
 }
 
-export type Hex = string | number | bigint;
+export type Hex = Hex.Number | Hex.String | Buffer;
+
+export type NumStr = `${number}`;

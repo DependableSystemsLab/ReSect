@@ -2,11 +2,12 @@ import { Chain, type ChainName } from "../src/config/Chain";
 import { etherscanApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Etherscan, TenderlyWithDb, type DebugTraceProvider } from "../src/providers";
 import { Reentrancy } from "../src/Reentrancy";
+import type { Hex } from "../src/utils";
 
 interface TestCaseBase {
 	name: string;
 	chain: ChainName;
-	txHash: string;
+	txHash: Hex.String;
 	skip?: boolean;
 }
 

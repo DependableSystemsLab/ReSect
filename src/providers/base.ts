@@ -1,13 +1,12 @@
-import type { SetFieldType } from "type-fest";
 import { Block, Database, Transaction } from "../database";
 import { Hex, type CallTrace, type DebugTrace, type MinimalTrace, type Trace } from "../utils";
 
 export interface TraceProvider<T extends MinimalTrace = MinimalTrace> {
-	getCallTraces(txHash: string): Promise<CallTrace<T>[]>;
+	getCallTraces(txHash: Hex.TxHash): Promise<CallTrace<T>[]>;
 }
 
 export interface DebugTraceProvider<T extends MinimalTrace = MinimalTrace> {
-	getDebugTrace(txHash: string): Promise<DebugTrace<T>>;
+	getDebugTrace(txHash: Hex.TxHash): Promise<DebugTrace<T>>;
 }
 
 export type DbExtensionContext = DebugTraceProvider<Trace> & {
@@ -16,7 +15,7 @@ export type DbExtensionContext = DebugTraceProvider<Trace> & {
 	readonly provider: RPC.ExtendedProvider;
 }
 
-export async function getDebugTraceWithDb(this: DbExtensionContext, txHash: string): Promise<DebugTrace<Trace>> {
+export async function getDebugTraceWithDb(this: DbExtensionContext, txHash: Hex.TxHash): Promise<DebugTrace<Trace>> {
 	let result = await this.db.getDebugTrace(txHash);
 	if (result)
 		return result;
@@ -56,73 +55,70 @@ export namespace RPC {
 
 	export type BlockTag = "earliest" | "latest" | "safe" | "finalized" | "pending";
 
-	export type BlockNumber = string | BlockTag;
+	export type BlockNumber = Hex.String | BlockTag;
 
 	export interface CallRequest {
-		from?: string;
-		to: string;
-		gas?: string;
-		gasPrice?: string;
-		value?: string;
-		input?: string;
+		from?: Hex.Address;
+		to: Hex.Address;
+		gas?: Hex.String;
+		gasPrice?: Hex.String;
+		value?: Hex.String;
+		input?: Hex.String;
 	}
 
-	/**
-	 * Every field is in hex format.
-	 */
-	export interface Block<T extends string | Transaction = string> {
-		baseFeePerGas: string;
-		difficulty: string;
-		extraData: string;
-		gasLimit: string;
-		gasUsed: string;
-		hash: string;
-		logsBloom: string;
-		miner: string;
-		mixHash: string;
-		nonce: string;
-		number: string;
-		parentHash: string;
-		receiptsRoot: string;
-		sha3Uncles: string;
-		size: string;
-		stateRoot: string;
-		timestamp: string;
-		totalDifficulty: string;
+	export interface Block<T extends Hex.TxHash | Transaction = Hex.TxHash> {
+		baseFeePerGas: Hex.String;
+		difficulty: Hex.String;
+		extraData: Hex.String;
+		gasLimit: Hex.String;
+		gasUsed: Hex.String;
+		hash: Hex.BlockHash;
+		logsBloom: Hex.String;
+		miner: Hex.Address;
+		mixHash: Hex.String;
+		nonce: Hex.String;
+		number: Hex.String;
+		parentHash: Hex.BlockHash;
+		receiptsRoot: Hex.String;
+		sha3Uncles: Hex.String;
+		size: Hex.String;
+		stateRoot: Hex.String;
+		timestamp: Hex.String;
+		totalDifficulty: Hex.String;
 		transactions: T[];
-		transactionsRoot: string;
-		uncles: string[];
+		transactionsRoot: Hex.String;
+		uncles: Hex.BlockHash[];
 	}
 
 	export interface Transaction {
-		blockHash: string;
-		blockNumber: string;
-		from: string;
-		gas: string;
-		gasPrice: string;
-		maxFeePerGas: string;
-		maxPriorityFeePerGas: string;
-		hash: string;
-		input: string;
-		nonce: string;
-		to: string;
-		transactionIndex: string;
-		value: string;
-		type: string;
-		accessList: string[];
-		chainId: string;
-		v: string;
-		r: string;
-		s: string;
+		blockHash: Hex.BlockHash;
+		blockNumber: Hex.String;
+		from: Hex.Address;
+		gas: Hex.String;
+		gasPrice: Hex.String;
+		maxFeePerGas: Hex.String;
+		maxPriorityFeePerGas: Hex.String;
+		hash: Hex.TxHash;
+		input: Hex.String;
+		nonce: Hex.String;
+		to: Hex.Address;
+		transactionIndex: Hex.String;
+		value: Hex.String;
+		type: Hex.String;
+		accessList: Hex.String[];
+		chainId: Hex.String;
+		v: Hex.String;
+		r: Hex.String;
+		s: Hex.String;
 	}
 
 	export interface Provider {
-		blockNumber(): Promise<string>;
+		blockNumber(): Promise<Hex.String>;
 		getBlockByNumber(blockNumber: BlockNumber, full: boolean): Promise<Block | Block<Transaction> | null>;
-		getTransactionByHash(txHash: string): Promise<Transaction | null>;
-		getCode(address: string, blockNumber: BlockNumber): Promise<string>;
-		getStorageAt(address: string, position: string, blockNumber: BlockNumber): Promise<string>;
-		call(request: CallRequest, blockNumber: BlockNumber): Promise<string>;
+		getTransactionByHash(txHash: Hex.TxHash): Promise<Transaction | null>;
+		getCode(address: Hex.Address, blockNumber: BlockNumber): Promise<Hex.String>;
+		getStorageAt(address: Hex.Address, position: Hex.String, blockNumber: BlockNumber): Promise<Hex.String>;
+		call(request: CallRequest, blockNumber: BlockNumber): Promise<Hex.String>;
 	}
 
 	export type MultiChainProvider = {
@@ -133,6 +129,19 @@ export namespace RPC {
 
 	const blockTags = ["earliest", "latest", "safe", "finalized", "pending"] as const satisfies BlockTag[];
 
+	export namespace ExtendedProvider {
+		export type BlockNumber = BlockTag | Hex.Number | Hex.String;
+
+		export interface CallRequest {
+			from?: Hex.String;
+			to: Hex.String;
+			gas?: Hex;
+			gasPrice?: Hex;
+			value?: Hex;
+			input?: Hex;
+		}
+	}
+
 	export class ExtendedProvider {
 		readonly #provider: MultiChainProvider;
 
@@ -140,10 +149,10 @@ export namespace RPC {
 			this.#provider = provider;
 		}
 
-		#convertBlockNumber(blockNumber: Hex | BlockTag | undefined): string {
+		#convertBlockNumber(blockNumber: ExtendedProvider.BlockNumber | undefined): Hex.String | BlockTag {
 			blockNumber ??= "latest";
 			if (typeof blockNumber !== "string" || !blockTags.includes(blockNumber as BlockTag))
-				blockNumber = Hex.verify(blockNumber);
+				blockNumber = Hex.toString(blockNumber);
 			return blockNumber;
 		}
 
@@ -152,44 +161,41 @@ export namespace RPC {
 			return Number.parseInt(result, 16);
 		}
 
-		getBlockByNumber(blockNumber: Hex | BlockTag, full?: false, chainId?: number): Promise<Block | null>;
-		getBlockByNumber(blockNumber: Hex | BlockTag, full: true, chainId?: number): Promise<Block<Transaction> | null>;
-		getBlockByNumber(blockNumber: Hex | BlockTag, full?: boolean, chainId?: number): Promise<Block | Block<Transaction> | null>;
-		async getBlockByNumber(blockNumber: Hex | BlockTag, full: boolean = false, chainId?: number): Promise<Block | Block<Transaction> | null> {
+		getBlockByNumber(blockNumber: ExtendedProvider.BlockNumber, full?: false, chainId?: number): Promise<Block | null>;
+		getBlockByNumber(blockNumber: ExtendedProvider.BlockNumber, full: true, chainId?: number): Promise<Block<Transaction> | null>;
+		getBlockByNumber(blockNumber: ExtendedProvider.BlockNumber, full?: boolean, chainId?: number): Promise<Block | Block<Transaction> | null>;
+		async getBlockByNumber(blockNumber: ExtendedProvider.BlockNumber, full: boolean = false, chainId?: number): Promise<Block | Block<Transaction> | null> {
 			blockNumber = this.#convertBlockNumber(blockNumber);
 			const result = await this.#provider.getBlockByNumber(blockNumber, full, chainId);
 			return result;
 		}
 
-		async getTransactionByHash(txHash: Hex, chainId?: number): Promise<Transaction | null> {
-			txHash = Hex.verifyTxHash(txHash);
-			const result = await this.#provider.getTransactionByHash(txHash, chainId);
+		async getTransactionByHash(txHash: Hex.String, chainId?: number): Promise<Transaction | null> {
+			const result = await this.#provider.getTransactionByHash(Hex.verifyTxHash(txHash), chainId);
 			return result;
 		}
 
-		async getCode(address: Hex, blockNumber?: Hex | BlockTag, chainId?: number): Promise<Buffer | null> {
-			address = Hex.verifyAddress(address);
+		async getCode(address: Hex.String, blockNumber?: ExtendedProvider.BlockNumber, chainId?: number): Promise<Buffer | null> {
 			blockNumber = this.#convertBlockNumber(blockNumber);
-			const result = await this.#provider.getCode(address, blockNumber, chainId).then(Hex.removePrefix);
+			const result = await this.#provider.getCode(Hex.verifyAddress(address), blockNumber, chainId).then(Hex.removePrefix);
 			return result === "" ? null : Buffer.from(result, "hex");
 		}
 
-		async getStorageAt(address: Hex, position: Hex, blockNumber?: Hex | BlockTag, chainId?: number): Promise<bigint> {
-			address = Hex.verifyAddress(address);
-			position = Hex.verify(position);
+		async getStorageAt(address: Hex.String, position: Hex, blockNumber?: ExtendedProvider.BlockNumber, chainId?: number): Promise<bigint> {
+			position = Hex.toString(position);
 			blockNumber = this.#convertBlockNumber(blockNumber);
-			const result = await this.#provider.getStorageAt(address, position, blockNumber, chainId).then(Hex.removePrefix);
+			const result = await this.#provider.getStorageAt(Hex.verifyAddress(address), position, blockNumber, chainId).then(Hex.removePrefix);
 			return BigInt(result);
 		}
 
-		async call(request: SetFieldType<CallRequest, keyof CallRequest, Hex>, blockNumber?: Hex | BlockTag, chainId?: number): Promise<Buffer> {
+		async call(request: ExtendedProvider.CallRequest, blockNumber?: ExtendedProvider.BlockNumber, chainId?: number): Promise<Buffer> {
 			const req: CallRequest = {
 				from: request.from ? Hex.verifyAddress(request.from) : undefined,
 				to: Hex.verifyAddress(request.to),
-				gas: request.gas ? Hex.verify(request.gas) : undefined,
-				gasPrice: request.gasPrice ? Hex.verify(request.gasPrice) : undefined,
-				value: request.value ? Hex.verify(request.value) : undefined,
-				input: request.input ? Hex.verify(request.input) : undefined
+				gas: request.gas ? Hex.toString(request.gas) : undefined,
+				gasPrice: request.gasPrice ? Hex.toString(request.gasPrice) : undefined,
+				value: request.value ? Hex.toString(request.value) : undefined,
+				input: request.input ? Hex.toString(request.input) : undefined
 			};
 			blockNumber = this.#convertBlockNumber(blockNumber);
 			const result = await this.#provider.call(req, blockNumber, chainId).then(Hex.removePrefix);

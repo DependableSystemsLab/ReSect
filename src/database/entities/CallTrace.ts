@@ -1,6 +1,6 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-import { Transaction } from "./Transaction";
 import { Hex, CallType } from "../../utils";
+import { Transaction } from "./Transaction";
 
 
 @Entity("CallTrace")
@@ -9,7 +9,7 @@ export class CallTrace {
 		name: "tx_hash",
 		length: 64
 	})
-	txHash!: string;
+	txHash!: Hex.TxHashNP;
 
 	@PrimaryColumn("integer")
 	index!: number;
@@ -18,10 +18,10 @@ export class CallTrace {
 	depth!: number;
 
 	@Column("character", { length: 40 })
-	from!: string;
+	from!: Hex.AddressNP;
 
 	@Column("character", { length: 40 })
-	to!: string;
+	to!: Hex.AddressNP;
 
 	@Column("enum", {
 		enum: CallType,
@@ -85,11 +85,11 @@ export class CallTrace {
 			: this.index - this.parentIndex - 1;
 	}
 
-	get selector(): string | undefined {
+	get selector(): Hex.Selector | undefined {
 		if (this.input === undefined || this.input.length < 4)
 			return undefined;
 		if (this.type.endsWith("CALL") || this.type === CallType.CALLCODE)
-			return this.input.toString("hex", 0, 4);
+			return ("0x" + this.input.toString("hex", 0, 4)) as Hex.Selector;
 		return undefined;
 	}
 
@@ -103,18 +103,18 @@ export class CallTrace {
 		return result.reverse();
 	}
 
-	get inputAsHex(): string {
-		return "0x" + this.input.toString("hex");
+	get inputAsHex(): Hex.String {
+		return `0x${this.input.toString("hex")}`;
 	}
 	set inputAsHex(value: Hex) {
 		value = Hex.toString(value);
 		this.input = Buffer.from(Hex.removePrefix(value), "hex");
 	}
 
-	get outputAsHex(): string | undefined {
+	get outputAsHex(): Hex.String | undefined {
 		if (this.output === undefined)
 			return undefined;
-		return "0x" + this.output.toString("hex");
+		return `0x${this.output.toString("hex")}`;
 	}
 	set outputAsHex(value: Hex | undefined) {
 		if (value === undefined)

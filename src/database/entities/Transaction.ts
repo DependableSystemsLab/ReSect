@@ -1,4 +1,5 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
+import type { Hex } from "../../utils";
 import { Contract } from "./Contract";
 import { Block } from "./Block";
 import { CallTrace } from "./CallTrace";
@@ -15,7 +16,7 @@ enum TransactionAction {
 @Entity("Transaction")
 export class Transaction {
 	@PrimaryColumn("character", { length: 64 })
-	hash!: string;
+	hash!: Hex.TxHashNP;
 
 	@Column("integer", { name: "blockchain" })
 	blockchainId!: number;
@@ -27,10 +28,10 @@ export class Transaction {
 	blockIndex!: number;
 
 	@Column("character", { length: 40 })
-	sender!: string;
+	sender!: Hex.AddressNP;
 
 	@Column("character", { length: 40, nullable: true })
-	receiver?: string;
+	receiver?: Hex.AddressNP;
 
 	@Column("integer", { name: "associated_attack" })
 	attackId?: number;
