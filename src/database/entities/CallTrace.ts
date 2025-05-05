@@ -1,6 +1,7 @@
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 import { CallType } from "../../providers";
 import { Transaction } from "./Transaction";
+import { Hex } from "../../utils";
 
 
 @Entity("CallTrace")
@@ -30,7 +31,7 @@ export class CallTrace {
 	type!: CallType;
 
 	@Column("numeric", { precision: 31, scale: 0 })
-	value!: bigint;
+	value?: bigint;
 
 	@Column("bigint")
 	gas!: bigint;
@@ -38,14 +39,14 @@ export class CallTrace {
 	@Column("bigint", { name: "gas_used" })
 	gasUsed!: bigint;
 
-	@Column("character", { length: 8, nullable: true })
-	selector?: string;
-
 	@Column("bytea", { nullable: true })
-	parameters?: Buffer;
+	input!: Buffer;
 
 	@Column("bytea", { nullable: true })
 	output?: Buffer;
+
+	@Column("text", { nullable: true })
+	error?: string;
 
 	@Column("integer", {
 		name: "parent_index",
@@ -85,6 +86,14 @@ export class CallTrace {
 			: this.index - this.parentIndex - 1;
 	}
 
+	get selector(): string | undefined {
+		if (this.input === undefined || this.input.length < 4)
+			return undefined;
+		if (this.type.endsWith("CALL") || this.type === CallType.CALLCODE)
+			return this.input.toString("hex", 0, 4);
+		return undefined;
+	}
+
 	get stack(): number[] {
 		const result: number[] = [this.levelIndex];
 		let parent: CallTrace | undefined = this.parent;
@@ -93,5 +102,27 @@ export class CallTrace {
 			parent = parent.parent;
 		}
 		return result.reverse();
+	}
+
+	get inputAsHex(): string {
+		return "0x" + this.input.toString("hex");
+	}
+	set inputAsHex(value: Hex) {
+		value = Hex.toString(value);
+		this.input = Buffer.from(Hex.removePrefix(value), "hex");
+	}
+
+	get outputAsHex(): string | undefined {
+		if (this.output === undefined)
+			return undefined;
+		return "0x" + this.output.toString("hex");
+	}
+	set outputAsHex(value: Hex | undefined) {
+		if (value === undefined)
+			this.output = undefined;
+		else {
+			value = Hex.toString(value);
+			this.output = Buffer.from(Hex.removePrefix(value), "hex");
+		}
 	}
 }

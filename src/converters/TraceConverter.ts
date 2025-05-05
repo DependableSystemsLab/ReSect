@@ -1,7 +1,7 @@
 import "basic-type-extensions";
 import { CallTrace as Entity } from "../database";
 import type { CallTrace, DebugTrace, MinimalTrace, Trace } from "../providers";
-import { Hex, splitInput } from "../utils";
+import { Hex } from "../utils";
 
 export namespace TraceConverter {
 	function compareCallTraces(a: CallTrace, b: CallTrace): number {
@@ -90,19 +90,15 @@ export namespace TraceConverter {
 		entity.from = Hex.removePrefix(trace.from);
 		entity.to = Hex.removePrefix(trace.to);
 		entity.type = trace.type;
-		entity.value = Hex.toBigInt(trace.value);
+		entity.inputAsHex = trace.input;
 		entity.gas = Hex.toBigInt(trace.gas);
 		entity.gasUsed = Hex.toBigInt(trace.gasUsed);
-		const [selector, parameters] = splitInput(trace.input);
-		if (selector)
-			entity.selector = Hex.removePrefix(selector);
-		if (parameters)
-			entity.parameters = Buffer.from(Hex.removePrefix(parameters), "hex");
-		if (trace.output) {
-			const output = Hex.removePrefix(trace.output);
-			if (output.length > 0)
-				entity.output = Buffer.from(output, "hex");
-		}
+		if (trace.value)
+			entity.value = Hex.toBigInt(trace.value);
+		if (trace.output)
+			entity.outputAsHex = trace.output;
+		if (trace.error)
+			entity.error = trace.error;
 		return entity;
 	}
 
@@ -110,13 +106,15 @@ export namespace TraceConverter {
 		trace.from = `0x${entity.from}`;
 		trace.to = `0x${entity.to}`;
 		trace.type = entity.type;
-		trace.value = Hex.toString(entity.value);
+		trace.input = entity.inputAsHex;
 		trace.gas = Hex.toString(entity.gas);
 		trace.gasUsed = Hex.toString(entity.gasUsed);
-		if (entity.selector)
-			trace.input = `0x${entity.selector}${entity.parameters ? `0x${entity.parameters.toString("hex")}` : ""}`;
+		if (entity.value !== undefined)
+			trace.value = Hex.toString(entity.value);
 		if (entity.output)
 			trace.output = `0x${entity.output.toString("hex")}`;
+		if (entity.error)
+			trace.error = entity.error;
 		return trace;
 	}
 

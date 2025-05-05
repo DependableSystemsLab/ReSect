@@ -1,6 +1,6 @@
 import { ChainName, chainNames } from "../config/Chain";
 import { Database } from "../database";
-import { verifyCallTypes, Hex, type TypeVerifiedDebugTrace } from "../utils";
+import { verifyCallTypes, Hex } from "../utils";
 import { getDebugTraceWithDb, type DebugTrace, type Trace, type DebugTraceProvider, type RPC } from "./base";
 
 
@@ -94,7 +94,7 @@ export class Tenderly implements DebugTraceProvider<DebugTrace<Trace>> {
 		txHash: Hex,
 		tracer: "callTracer" | "prestateTracer" = "callTracer",
 		onlyTopCall = false
-	): Promise<Tenderly.DebugTrace> {
+	): Promise<DebugTrace<Trace>> {
 		txHash = Hex.verifyTxHash(txHash);
 		const trace = await this.#request<Tenderly.DebugTraceRaw>("debug_traceTransaction", [txHash, { tracer, onlyTopCall }]);
 		return verifyCallTypes(trace);
@@ -129,17 +129,8 @@ export namespace Tenderly {
 		| [chainId: number, accessKey: string]
 		| [chain: ChainName | number, accessKey: string];
 
-	export interface DebugTraceRaw {
+	export type DebugTraceRaw = Omit<DebugTrace<Trace>, "type" | "calls"> & {
 		type: string;
-		from: string;
-		to: string;
-		value: string;
-		gas: string;
-		gasUsed: string;
-		input: string;
-		output: string;
 		calls?: DebugTraceRaw[];
 	};
-
-	export type DebugTrace = TypeVerifiedDebugTrace<DebugTraceRaw>;
 }

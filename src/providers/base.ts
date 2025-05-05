@@ -16,14 +16,15 @@ export interface MinimalTrace {
 	from: string;
 	to: string;
 	type: CallType;
-	input?: string;
-	output?: string;
+	input: string;
 }
 
 export interface Trace extends MinimalTrace {
-	value: string;
+	output?: string;
+	value?: string;
 	gas: string;
 	gasUsed: string;
+	error?: string;
 }
 
 export type CallTrace<T extends MinimalTrace = MinimalTrace> = T & {

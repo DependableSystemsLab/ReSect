@@ -137,12 +137,16 @@ export namespace Reentrancy {
 		VictimIn = 1 << 3
 	}
 
-	export type AnnotatedTrace = Omit<DebugTrace, "calls"> & {
-		selector?: string;
-		parameter?: string;
-		label?: Label;
-		calls?: AnnotatedTrace[];
-	};
+	export type AnnotatedTrace = DebugTrace<MinimalTrace & { label?: Label }>;
+
+	function hasLabel(trace: AnnotatedTrace, label: Label): boolean {
+		if (trace.label === undefined)
+			return false;
+		return (trace.label & label) !== 0;
+	}
+	function setLabel(trace: AnnotatedTrace, label: Label) {
+		trace.label = (trace.label ?? Label.None) | label;
+	}
 
 	export interface AnalysisResult {
 		readonly: boolean;
@@ -152,15 +156,6 @@ export namespace Reentrancy {
 		victims: AddressInfo[];
 		trace: AnnotatedTrace;
 		stack: number[];
-	}
-
-	function hasLabel(trace: AnnotatedTrace, label: Label): boolean {
-		if (trace.label === undefined)
-			return false;
-		return (trace.label & label) !== 0;
-	}
-	function setLabel(trace: AnnotatedTrace, label: Label) {
-		trace.label = (trace.label ?? Label.None) | label;
 	}
 
 	export class Analyzer {
@@ -203,13 +198,11 @@ export namespace Reentrancy {
 		}
 
 		static toAnnotatedTrace(trace: DebugTrace): AnnotatedTrace {
-			const [selector, parameter] = splitInput(trace.input ?? "0x");
 			const result: AnnotatedTrace = {
 				from: trace.from,
 				to: trace.to,
 				type: trace.type,
-				selector,
-				parameter,
+				input: trace.input,
 				label: undefined
 			};
 			if (trace.calls?.length)
