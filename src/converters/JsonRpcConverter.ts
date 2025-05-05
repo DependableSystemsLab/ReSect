@@ -10,7 +10,8 @@ export namespace JsonRpcConverter {
 		entity.timestamp = new Date(Hex.toNumber(block.timestamp) * 1000);
 		entity.gasLimit = Hex.toBigInt(block.gasLimit);
 		entity.gasUsed = Hex.toBigInt(block.gasUsed);
-		entity.baseFeePerGas = Hex.toBigInt(block.baseFeePerGas);
+		if (block.baseFeePerGas !== undefined)
+			entity.baseFeePerGas = Hex.toBigInt(block.baseFeePerGas);
 		entity.miner = Hex.removePrefix(block.miner);
 		entity.size = Hex.toNumber(block.size);
 		return entity;

@@ -67,7 +67,7 @@ export namespace RPC {
 	}
 
 	export interface Block<T extends Hex.TxHash | Transaction = Hex.TxHash> {
-		baseFeePerGas: Hex.String;
+		baseFeePerGas?: Hex.String;
 		difficulty: Hex.String;
 		extraData: Hex.String;
 		gasLimit: Hex.String;
