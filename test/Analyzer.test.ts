@@ -1,3 +1,4 @@
+import inspector from "node:inspector";
 import { Chain, type ChainName } from "../src/config/Chain";
 import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Etherscan, QuickNodeWithDb, TenderlyWithDb, type DebugTraceProvider } from "../src/providers";
@@ -25,6 +26,9 @@ type TestCase = PositiveTestCase | NegativeTestCase;
 const cases: TestCase[] = [];
 
 describe("Reentrancy Analyzer", () => {
+	const debug = inspector.url() !== undefined;
+	const timeout = debug ? 24 * 60 * 60_000 : 30_000;
+
 	const etherscan = new Etherscan(etherscanApiKey);
 	const debugProvider: DebugTraceProvider = quickNodeApiKey
 		? new QuickNodeWithDb(quickNodeApiKey, "Ethereum")
@@ -48,6 +52,6 @@ describe("Reentrancy Analyzer", () => {
 				}
 			}
 			expect(detected).toBe(testCase.isReentrancy);
-		}, 30_000);
+		}, timeout);
 	}
 });
