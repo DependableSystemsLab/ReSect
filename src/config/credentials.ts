@@ -1,5 +1,5 @@
-import { Etherscan } from "../providers/Etherscan";
-import { Chain, type ChainName } from "./Chain";
+import { Etherscan, Tenderly } from "../providers";
+import { Chain } from "./Chain";
 
 const {
 	ETHERSCAN_API_KEY: etherscanApiKey_,
@@ -37,8 +37,10 @@ const tenderlyKeys = Object.keys(process.env)
 			.join("");
 		if (!(chain in Chain))
 			throw new Error(`Invalid chain name in TENDERLY_ACCESS_KEY: ${chain} (${name})`);
-		return [chain as ChainName, value] as const;
+		if (!Tenderly.supports(chain))
+			throw new Error(`Tenderly does not support ${chain} (${name})`);
+		return [chain, value] as const;
 	})
 
-export type TenderlyApiKeys = Readonly<Partial<Record<ChainName, string>>>;
+export type TenderlyApiKeys = Readonly<Partial<Record<Tenderly.Chain, string>>>;
 export const tenderlyNodeAccessKeys: TenderlyApiKeys = Object.freeze(Object.fromEntries(tenderlyKeys));

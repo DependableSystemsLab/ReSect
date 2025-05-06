@@ -25,24 +25,21 @@ type TestCase = PositiveTestCase | NegativeTestCase;
 const cases: TestCase[] = [];
 
 describe("Reentrancy Analyzer", () => {
-	const debugProviders = new Map<ChainName, DebugTraceProvider>();
+	const etherscan = new Etherscan(etherscanApiKey);
+	const debugProvider: DebugTraceProvider = new TenderlyWithDb(
+		tenderlyNodeAccessKeys,
+		"Ethereum",
+		etherscan.geth
+	);
 
 	for (const testCase of cases) {
 		const it = testCase.skip ? test.skip : test;
 		it(`${testCase.name} on ${testCase.chain}`, async () => {
 			const { chain, txHash } = testCase;
-			const etherscan = new Etherscan(etherscanApiKey, Chain[chain]);
-			let provider = debugProviders.get(chain);
-			if (!provider) {
-				if (!(chain in tenderlyNodeAccessKeys))
-					throw new Error(`No Tenderly access key for ${chain}`);
-				const key = tenderlyNodeAccessKeys[chain];
-				provider = new TenderlyWithDb(chain, key, etherscan.geth);
-				debugProviders.set(chain, provider);
-			}
-			const analyzer = new Reentrancy.Analyzer(chain, etherscan, provider);
+			const chainId = Chain[chain];
+			const analyzer = new Reentrancy.Analyzer(etherscan, debugProvider);
 			let detected = false;
-			for await (const result of analyzer.analyze(txHash)) {
+			for await (const result of analyzer.analyze(txHash, chainId)) {
 				detected = true;
 				if (!testCase.isReentrancy)
 					fail(`Expected no reentrancy, but got ${result.stack}`);

@@ -1,7 +1,5 @@
-import { whatsabi, type providers, type AutoloadConfig } from "@shazow/whatsabi";
 import "basic-type-extensions";
 import { Etherscan, type RPC, type DebugTraceProvider } from "./providers";
-import { Chain, type ChainName } from "./config/Chain";
 import { CallType, Counter, Hex, extractSelector, type DebugTrace, type MinimalTrace } from "./utils";
 
 export namespace Reentrancy {
@@ -159,35 +157,13 @@ export namespace Reentrancy {
 	}
 
 	export class Analyzer {
-		readonly #rpcProvider: RPC.Provider;
-		readonly #autoload: (address: string) => Promise<whatsabi.AutoloadResult>;
+		readonly #rpcProvider: RPC.MultiChainProvider;
 
 		constructor(
-			readonly chain: ChainName,
 			readonly etherscan: Etherscan,
-			readonly traceProvider: DebugTraceProvider,
-			rpcProvider?: RPC.Provider
+			readonly debugProvider: DebugTraceProvider,
+			rpcProvider?: RPC.MultiChainProvider
 		) {
-			const chainId = Chain[chain];
-			const whatsabiConfig: AutoloadConfig = {
-				provider: {
-					getCode: address => {
-						const addr = Hex.verifyAddress(Hex.addPrefix(address))
-						return this.#rpcProvider.getCode(addr, "latest");
-					},
-					getStorageAt: (address, slot) => {
-						const addr = Hex.verifyAddress(Hex.addPrefix(address))
-						return this.#rpcProvider.getStorageAt(addr, Hex.toString(slot), "latest");
-					},
-					call: ({ to, data }) => {
-						const toAddr = Hex.verifyAddress(Hex.addPrefix(to))
-						return this.#rpcProvider.call({ to: toAddr, input: Hex.verify(data) }, "latest");
-					},
-					getAddress: () => { throw new Error("Not implemented"); },
-				} satisfies providers.Provider,
-				abiLoader: new whatsabi.loaders.EtherscanV2ABILoader({ apiKey: etherscan.apiKey, chainId })
-			};
-			this.#autoload = (address: string) => whatsabi.autoload(address, whatsabiConfig);
 			this.#rpcProvider = rpcProvider ??= etherscan.geth;
 		}
 
@@ -225,14 +201,14 @@ export namespace Reentrancy {
 			return creatorA === creatorB;
 		}
 
-		async getAddressInfos(callTrace: DebugTrace): Promise<Map<string, AddressInfo>> {
+		async getAddressInfos(callTrace: DebugTrace, chain: number): Promise<Map<string, AddressInfo>> {
 			const result = new Map<Hex.Address, AddressInfo>();
 			const addresses = Analyzer.getAllAddresses(callTrace);
 			result.set(callTrace.from, { address: callTrace.from, isContract: false });
 			addresses.delete(callTrace.from);
 			const contracts = new Array<Hex.Address>();
 			for (const address of addresses) {
-				const code = await this.#rpcProvider.getCode(address, "latest");
+				const code = await this.#rpcProvider.getCode(address, "latest", chain);
 				const info = {
 					address,
 					isContract: code !== "0x"
@@ -243,7 +219,7 @@ export namespace Reentrancy {
 				}
 				result.set(address, info);
 			}
-			const creations = await this.etherscan.getContractCreation(contracts);
+			const creations = await this.etherscan.getContractCreation(contracts, chain);
 			for (const creation of creations) {
 				if (creation === undefined)
 					continue;
@@ -257,10 +233,10 @@ export namespace Reentrancy {
 			return result;
 		}
 
-		async *analyze(txHash: Hex.String): AsyncGenerator<AnalysisResult> {
-			const rawTrace = await this.traceProvider.getDebugTrace(Hex.verifyTxHash(txHash));
+		async *analyze(txHash: Hex.String, chain: number): AsyncGenerator<AnalysisResult> {
+			const rawTrace = await this.debugProvider.getDebugTrace(Hex.verifyTxHash(txHash), chain);
 			const callTrace = Analyzer.toAnnotatedTrace(rawTrace);
-			const infos = await this.getAddressInfos(callTrace);
+			const infos = await this.getAddressInfos(callTrace, chain);
 			const sender = callTrace.from;
 			const senderInfo = infos.get(sender)!;
 			const senderAddresses = Array.from(infos.values())

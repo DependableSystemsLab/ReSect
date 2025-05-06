@@ -60,7 +60,7 @@ export class Etherscan {
 	}
 	set chainId(chainId: number) {
 		this.#chainId = chainId;
-		this.geth.chainId = chainId;
+		this.geth.chain = chainId;
 	}
 
 	static #setBlockRange(
@@ -310,7 +310,7 @@ export namespace Etherscan {
 
 		constructor(
 			apiKey: string | Readonly<EtherscanApiKey>,
-			public chainId: number = 1
+			public chain: number = 1
 		) {
 			[this.apiKey, this.#fetch] = getFetch(apiKey);
 		}
@@ -326,7 +326,7 @@ export namespace Etherscan {
 				module: "proxy",
 				action,
 				apikey: this.apiKey,
-				chainid: chain ?? this.chainId
+				chainid: chain ?? this.chain
 			});
 			const url = new URL(Etherscan.BASE_URL);
 			url.search = searchParams.toString();

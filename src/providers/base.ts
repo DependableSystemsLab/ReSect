@@ -2,34 +2,33 @@ import { Block, Database, Transaction } from "../database";
 import { Hex, type CallTrace, type DebugTrace, type MinimalTrace, type Trace } from "../utils";
 
 export interface TraceProvider<T extends MinimalTrace = MinimalTrace> {
-	getCallTraces(txHash: Hex.TxHash): Promise<CallTrace<T>[]>;
+	getCallTraces(txHash: Hex.TxHash, chain?: number): Promise<CallTrace<T>[]>;
 }
 
 export interface DebugTraceProvider<T extends MinimalTrace = MinimalTrace> {
-	getDebugTrace(txHash: Hex.TxHash): Promise<DebugTrace<T>>;
+	getDebugTrace(txHash: Hex.TxHash, chain?: number): Promise<DebugTrace<T>>;
 }
 
 export type DbExtensionContext = DebugTraceProvider<Trace> & {
-	readonly chainId: number;
 	readonly db: Database;
-	readonly provider: RPC.ExtendedProvider;
+	readonly provider: RPC.MultiChainProvider;
 }
 
-export async function getDebugTraceWithDb(this: DbExtensionContext, txHash: Hex.TxHash): Promise<DebugTrace<Trace>> {
+export async function getDebugTraceWithDb(this: DbExtensionContext, txHash: Hex.TxHash, chain: number): Promise<DebugTrace<Trace>> {
 	let result = await this.db.getDebugTrace(txHash);
 	if (result)
 		return result;
 	result = await this.getDebugTrace(txHash);
 	if (result) {
 		if (!await this.db.has(Transaction, Hex.removePrefix(txHash))) {
-			const tx = await this.provider.getTransactionByHash(txHash);
+			const tx = await this.provider.getTransactionByHash(txHash, chain);
 			if (tx == null)
 				throw new Error(`Transaction ${txHash} not found`);
-			if (!await this.db.has(Block, new Block(this.chainId, Hex.toNumber(tx.blockNumber)))) {
-				const block = await this.provider.getBlockByNumber(tx.blockNumber, false);
+			if (!await this.db.has(Block, new Block(chain, Hex.toNumber(tx.blockNumber)))) {
+				const block = await this.provider.getBlockByNumber(tx.blockNumber, false, chain);
 				if (block == null)
 					throw new Error(`Block ${tx.blockHash} not found`);
-				await this.db.saveBlock(block, this.chainId);
+				await this.db.saveBlock(block as RPC.Block, chain);
 			}
 			await this.db.saveTransaction(tx);
 		}
@@ -125,7 +124,7 @@ export namespace RPC {
 		[M in keyof Provider]: Provider[M] extends (...args: any[]) => infer R
 		? (...args: [...Parameters<Provider[M]>, chain?: number]) => R
 		: Provider[M];
-	}
+	} & { chain: number };
 
 	const blockTags = ["earliest", "latest", "safe", "finalized", "pending"] as const satisfies BlockTag[];
 
