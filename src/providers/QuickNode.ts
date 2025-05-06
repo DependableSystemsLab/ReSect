@@ -3,7 +3,7 @@ import type { QuickNodeApiKey } from "../config/credentials";
 import { Database } from "../database";
 import { Hex } from "../utils";
 import { verifyChain, RPC, type DebugTraceProvider } from "./common";
-import { getDebugTraceWithDb, type DbExtensionContext } from "./integration";
+import { debugTraceTransaction } from "./integration";
 
 
 const endpoints = {
@@ -107,25 +107,24 @@ export class QuickNode
 }
 
 export class QuickNodeWithDb extends QuickNode {
-	readonly #ctx: DbExtensionContext;
+	readonly db: Database;
 
 	constructor(
 		apiKey: QuickNodeApiKey,
 		chain: QuickNode.Chain | number,
-		provider: RPC.MultiChainProvider,
 		db?: Database
 	) {
 		super(apiKey, chain);
-		this.#ctx = {
-			db: db ?? Database.default,
-			provider,
-			getDebugTrace: (txHash, chain) => super.getDebugTrace(txHash, chain)
-		} as DbExtensionContext;
+		this.db = db ?? Database.default;
 	}
 
-	override async getDebugTrace(txHash: Hex.TxHash, chain?: QuickNode.Chain | number) {
+	override debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: QuickNode.Chain | number) {
 		chain = chain === undefined ? this.chain : AllChain[this.verifyChain(chain)];
-		return getDebugTraceWithDb.call(this.#ctx, txHash, chain);
+		return debugTraceTransaction.call(
+			this,
+			super.debugTraceTransaction.bind(this),
+			txHash, options, chain
+		);
 	}
 }
 

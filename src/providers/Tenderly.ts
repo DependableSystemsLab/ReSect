@@ -3,7 +3,7 @@ import type { TenderlyApiKeys } from "../config/credentials";
 import { Database } from "../database";
 import { verifyCallTypes, Hex } from "../utils";
 import { verifyChain, RPC, type DebugTraceProvider } from "./common";
-import { getDebugTraceWithDb, type DbExtensionContext } from "./integration";
+import { debugTraceTransaction, type IntegrationContext } from "./integration";
 
 
 const endpoints = {
@@ -93,7 +93,7 @@ export class Tenderly
 }
 
 export class TenderlyWithDb extends Tenderly {
-	readonly #ctx: DbExtensionContext;
+	readonly #ctx: IntegrationContext;
 
 	constructor(
 		chain: Tenderly.Chain | number,
@@ -115,16 +115,19 @@ export class TenderlyWithDb extends Tenderly {
 	) {
 		// @ts-ignore
 		super(param1, param2);
-		this.#ctx = {
-			db: db ?? Database.default,
-			provider,
-			getDebugTrace: (txHash, chain) => super.getDebugTrace(txHash, chain)
-		} as DbExtensionContext;
+		const database = db ?? Database.default;
+		this.#ctx = new Proxy(provider, {
+			get: (target, p, receiver) => p === "db" ? database : Reflect.get(target, p, receiver)
+		}) as IntegrationContext;
 	}
 
-	override async getDebugTrace(txHash: Hex.TxHash, chain?: Tenderly.Chain | number) {
+	override debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: Tenderly.Chain | number) {
 		chain = chain === undefined ? this.chain : AllChain[this.verifyChain(chain)];
-		return getDebugTraceWithDb.call(this.#ctx, txHash, chain);
+		return debugTraceTransaction.call(
+			this.#ctx,
+			super.debugTraceTransaction.bind(this),
+			txHash, options, chain
+		);
 	}
 }
 
