@@ -25,6 +25,16 @@ const apiTier: Etherscan.APITier = (() => {
 export type EtherscanApiKey = [key: string, tier?: Etherscan.APITier];
 export const etherscanApiKey = Object.freeze([etherscanApiKey_, apiTier] as EtherscanApiKey);
 
+const {
+	QUICKNODE_ENDPOINT: qnEndpoint,
+	QUICKNODE_TOKEN: qnToken
+} = process.env;
+
+export type QuickNodeApiKey = [endpoint: string, token: string];
+export const quickNodeApiKey = qnEndpoint && qnToken
+	? Object.freeze([qnEndpoint, qnToken] as QuickNodeApiKey)
+	: undefined;
+
 const tenderlyKeyPrefix = "TENDERLY_ACCESS_KEY_";
 const tenderlyKeys = Object.keys(process.env)
 	.filter(key => key.startsWith(tenderlyKeyPrefix))
