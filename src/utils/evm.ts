@@ -17,14 +17,6 @@ export interface MinimalTrace {
 	input: Hex.String;
 }
 
-export interface Trace extends MinimalTrace {
-	output?: Hex.String;
-	value?: Hex.String;
-	gas: Hex.String;
-	gasUsed: Hex.String;
-	error?: string;
-}
-
 export type CallTrace<T extends MinimalTrace = MinimalTrace> = T & {
 	traceAddress: number[];
 }

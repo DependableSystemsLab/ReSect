@@ -1,6 +1,7 @@
 import "basic-type-extensions";
 import { CallTrace as Entity } from "../database";
-import { Hex, type CallTrace, type DebugTrace, type MinimalTrace, type Trace } from "../utils";
+import type { RPC } from "../providers";
+import { Hex, type CallTrace, type DebugTrace, type MinimalTrace } from "../utils";
 
 export namespace TraceConverter {
 	function compareCallTraces(a: CallTrace, b: CallTrace): number {
@@ -87,7 +88,7 @@ export namespace TraceConverter {
 		return entities;
 	}
 
-	function _setEntityFromTrace(entity: Entity, trace: Trace): Entity {
+	function _setEntityFromTrace(entity: Entity, trace: RPC.Debug.TraceInfo): Entity {
 		entity.from = Hex.removePrefix(trace.from);
 		entity.to = Hex.removePrefix(trace.to);
 		entity.type = trace.type;
@@ -103,7 +104,7 @@ export namespace TraceConverter {
 		return entity;
 	}
 
-	function _setTraceFromEntity(trace: Trace, entity: Entity): Trace {
+	function _setTraceFromEntity(trace: RPC.Debug.TraceInfo, entity: Entity): RPC.Debug.TraceInfo {
 		if (entity.from)
 			trace.from = `0x${entity.from}`;
 		if (entity.to)
@@ -126,7 +127,7 @@ export namespace TraceConverter {
 	}
 
 	function* _debugTraceToEntities(
-		debugTrace: DebugTrace<Trace>,
+		debugTrace: RPC.Debug.Trace,
 		depth: number, levelIndex: number, parentIndex: number | null
 	): Generator<Entity> {
 		const trace = new Entity();
@@ -143,7 +144,7 @@ export namespace TraceConverter {
 		}
 	}
 
-	export function debugTraceToEntities(debugTrace: DebugTrace<Trace>, txHash: Hex.String): Entity[] {
+	export function debugTraceToEntities(debugTrace: RPC.Debug.Trace, txHash: Hex.String): Entity[] {
 		const hash = Hex.removePrefix(Hex.verifyTxHash(txHash));
 		const traces = Array.from(_debugTraceToEntities(debugTrace, 0, 0, null));
 		for (const trace of traces)
@@ -151,23 +152,23 @@ export namespace TraceConverter {
 		return traces;
 	}
 
-	export function entityToDebugTrace(entity: Entity): DebugTrace<Trace> {
-		const trace = {} as DebugTrace<Trace>;
+	export function entityToDebugTrace(entity: Entity): RPC.Debug.Trace {
+		const trace = {} as RPC.Debug.Trace;
 		_setTraceFromEntity(trace, entity);
 		if (entity.children?.length)
 			trace.calls = entity.children.map(entityToDebugTrace);
 		return trace;
 	}
 
-	export function callTracesToEntities(callTraces: CallTrace<Trace>[], txHash: Hex.String, sort: boolean = true): Entity[] {
+	export function callTracesToEntities(callTraces: CallTrace<RPC.Debug.TraceInfo>[], txHash: Hex.String, sort: boolean = true): Entity[] {
 		const debugTrace = callTracesToDebugTrace(callTraces, true, sort);
 		return debugTraceToEntities(debugTrace, txHash);
 	}
 
-	export function entitiesToCallTraces(entities: Entity[]): CallTrace<Trace>[] {
+	export function entitiesToCallTraces(entities: Entity[]): CallTrace<RPC.Debug.TraceInfo>[] {
 		entities = buildEntityHierarchy(entities);
 		return entities.map(entity => {
-			const trace = {} as CallTrace<Trace>;
+			const trace = {} as CallTrace<RPC.Debug.TraceInfo>;
 			const stack = entity.stack;
 			if (stack === undefined)
 				throw new Error("Parent chain incomplete");

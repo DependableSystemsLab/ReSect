@@ -1,7 +1,7 @@
 import { Chain as AllChain, type ChainName } from "../config/Chain";
 import type { TenderlyApiKeys } from "../config/credentials";
 import { Database } from "../database";
-import { verifyCallTypes, Hex, type Trace, type DebugTrace } from "../utils";
+import { verifyCallTypes, Hex } from "../utils";
 import { getDebugTraceWithDb, verifyChain, RPC, type DebugTraceProvider, type DbExtensionContext } from "./base";
 
 
@@ -32,7 +32,7 @@ const endpoints = {
 
 export class Tenderly
 	extends RPC.MultiChainProviderBase<Tenderly.Chain>
-	implements DebugTraceProvider<DebugTrace<Trace>> {
+	implements RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.TraceInfo> {
 
 	readonly #apiKeys: TenderlyApiKeys;
 	#chainName: Tenderly.Chain;
@@ -76,19 +76,18 @@ export class Tenderly
 		return `https://${endpoints[chain]}.gateway.tenderly.co/${this.#apiKeys[chain]}`;
 	}
 
-	getDebugTrace(txHash: Hex.String, chain?: Tenderly.Chain | number): Promise<DebugTrace<Trace>> {
-		return this.debugTraceTransaction(txHash, "callTracer", false, chain);
+	getDebugTrace(txHash: Hex.String, chain?: Tenderly.Chain | number) {
+		return this.debugTraceTransaction(txHash, {}, chain);
 	}
 
 	async debugTraceTransaction(
 		txHash: Hex.String,
-		tracer: "callTracer" | "prestateTracer" = "callTracer",
-		onlyTopCall = false,
+		options: RPC.Debug.DebugTransactionOptions,
 		chain?: Tenderly.Chain | number
-	): Promise<DebugTrace<Trace>> {
+	) {
 		Hex.verifyTxHash(txHash);
-		const trace = await this.request<Tenderly.DebugTraceRaw>("debug_traceTransaction", [txHash, { tracer, onlyTopCall }], chain);
-		return verifyCallTypes(trace);
+		const trace = await this.request<Tenderly.DebugTraceRaw | null>("debug_traceTransaction", [txHash, options], chain);
+		return trace ? verifyCallTypes(trace) : null;
 	}
 }
 
@@ -137,7 +136,7 @@ export namespace Tenderly {
 		return chain in endpoints;
 	}
 
-	export type DebugTraceRaw = Omit<DebugTrace<Trace>, "type" | "calls"> & {
+	export type DebugTraceRaw = Omit<RPC.Debug.Trace, "type" | "calls"> & {
 		type: string;
 		calls?: DebugTraceRaw[];
 	};

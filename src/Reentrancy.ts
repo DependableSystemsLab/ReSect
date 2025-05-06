@@ -235,6 +235,8 @@ export namespace Reentrancy {
 
 		async *analyze(txHash: Hex.String, chain: number): AsyncGenerator<AnalysisResult> {
 			const rawTrace = await this.debugProvider.getDebugTrace(Hex.verifyTxHash(txHash), chain);
+			if (rawTrace === null)
+				return;
 			const callTrace = Analyzer.toAnnotatedTrace(rawTrace);
 			const infos = await this.getAddressInfos(callTrace, chain);
 			const sender = callTrace.from;

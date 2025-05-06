@@ -1,6 +1,6 @@
 import { chainNames, type ChainName } from "../config/Chain";
 import { Block, Database, Transaction } from "../database";
-import { Hex, type CallTrace, type DebugTrace, type MinimalTrace, type Trace } from "../utils";
+import { Hex, type CallTrace, type DebugTrace, type MinimalTrace } from "../utils";
 
 
 export function verifyChain<T extends ChainName = ChainName>(
@@ -22,20 +22,20 @@ export function verifyChain<T extends ChainName = ChainName>(
 	return chain as T;
 }
 
-export interface TraceProvider<T extends MinimalTrace = MinimalTrace> {
-	getCallTraces(txHash: Hex.TxHash, chain?: number): Promise<CallTrace<T>[]>;
+export interface CallTraceProvider<T extends MinimalTrace = MinimalTrace> {
+	getCallTraces(txHash: Hex.TxHash, chain?: number): Promise<CallTrace<T>[] | null>;
 }
 
 export interface DebugTraceProvider<T extends MinimalTrace = MinimalTrace> {
-	getDebugTrace(txHash: Hex.TxHash, chain?: number): Promise<DebugTrace<T>>;
+	getDebugTrace(txHash: Hex.TxHash, chain?: number): Promise<DebugTrace<T> | null>;
 }
 
-export type DbExtensionContext = DebugTraceProvider<Trace> & {
+export type DbExtensionContext = DebugTraceProvider<RPC.Debug.TraceInfo> & {
 	readonly db: Database;
 	readonly provider: RPC.MultiChainProvider;
 }
 
-export async function getDebugTraceWithDb(this: DbExtensionContext, txHash: Hex.TxHash, chain: number): Promise<DebugTrace<Trace>> {
+export async function getDebugTraceWithDb(this: DbExtensionContext, txHash: Hex.TxHash, chain: number): Promise<RPC.Debug.Trace | null> {
 	let result = await this.db.getDebugTrace(txHash);
 	if (result)
 		return result;
@@ -141,10 +141,10 @@ export namespace RPC {
 		call(request: CallRequest, blockNumber: BlockNumber): Promise<Hex.String>;
 	}
 
-	export type MultiChainProvider = {
-		[M in keyof Provider]: Provider[M] extends (...args: any[]) => infer R
-		? (...args: [...Parameters<Provider[M]>, chain?: number]) => R
-		: Provider[M];
+	export type MultiChainProvider<P extends object = Provider> = {
+		[M in keyof P]: P[M] extends (...args: any[]) => infer R
+		? (...args: [...Parameters<P[M]>, chain?: number]) => R
+		: P[M];
 	} & { chain: number };
 
 	export abstract class MultiChainProviderBase<N extends ChainName = ChainName> {
@@ -255,4 +255,35 @@ export namespace RPC {
 			return Buffer.from(result, "hex");
 		}
 	}
+}
+
+export namespace RPC.Trace {
+	export type Trace = CallTrace;
+}
+
+export namespace RPC.Debug {
+	export interface TraceInfo extends MinimalTrace {
+		output?: Hex.String;
+		value?: Hex.String;
+		gas: Hex.String;
+		gasUsed: Hex.String;
+		error?: string;
+	}
+
+	export type Trace = DebugTrace<TraceInfo>;
+
+	export interface DebugTransactionOptions {
+		tracer?: "callTracer" | "prestateTracer";
+		tracerConfig?: {
+			onlyTopCall?: boolean;
+			diffMode?: boolean;
+		};
+		timeout?: number;
+	}
+
+	export interface Provider {
+		debugTraceTransaction(txHash: Hex.TxHash, options: DebugTransactionOptions): Promise<Trace | null>;
+	}
+
+	export type MultiChainProvider = RPC.MultiChainProvider<Provider>;
 }

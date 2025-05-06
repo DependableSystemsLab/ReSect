@@ -4,7 +4,7 @@ import { Block, CallTrace, Contract, Transaction } from "./entities";
 import { typeormConfig } from "../config/typeorm";
 import { EtherscanConverter, JsonRpcConverter, TraceConverter } from "../converters";
 import type { Etherscan, RPC } from "../providers";
-import { Hex, type Trace, type DebugTrace } from "../utils";
+import { Hex } from "../utils";
 
 
 export class Database {
@@ -102,7 +102,7 @@ export class Database {
 		return await repo.save(entity);
 	}
 
-	async getDebugTrace(txHash: Hex.String): Promise<DebugTrace<Trace> | undefined> {
+	async getDebugTrace(txHash: Hex.String): Promise<RPC.Debug.Trace | null> {
 		const hash = Hex.removePrefix(Hex.verifyTxHash(txHash));
 		const repo = await this.getRepository(CallTrace);
 		const traces = await repo.find({
@@ -111,12 +111,12 @@ export class Database {
 			order: { index: "ASC" }
 		});
 		if (traces.length === 0)
-			return undefined;
+			return null;
 		const topTrace = TraceConverter.buildEntityHierarchy(traces, false)[0];
 		return TraceConverter.entityToDebugTrace(topTrace);
 	}
 
-	async saveDebugTrace(trace: DebugTrace<Trace>, txHash: Hex.TxHash): Promise<CallTrace[]> {
+	async saveDebugTrace(trace: RPC.Debug.Trace, txHash: Hex.TxHash): Promise<CallTrace[]> {
 		const traces = TraceConverter.debugTraceToEntities(trace, txHash);
 		const manager = await this.getRepository(CallTrace);
 		return await manager.save(traces);
