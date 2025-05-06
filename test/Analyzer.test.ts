@@ -1,6 +1,6 @@
 import { Chain, type ChainName } from "../src/config/Chain";
-import { etherscanApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
-import { Etherscan, TenderlyWithDb, type DebugTraceProvider } from "../src/providers";
+import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
+import { Etherscan, QuickNodeWithDb, TenderlyWithDb, type DebugTraceProvider } from "../src/providers";
 import { Reentrancy } from "../src/Reentrancy";
 import type { Hex } from "../src/utils";
 
@@ -26,11 +26,9 @@ const cases: TestCase[] = [];
 
 describe("Reentrancy Analyzer", () => {
 	const etherscan = new Etherscan(etherscanApiKey);
-	const debugProvider: DebugTraceProvider = new TenderlyWithDb(
-		tenderlyNodeAccessKeys,
-		"Ethereum",
-		etherscan.geth
-	);
+	const debugProvider: DebugTraceProvider = quickNodeApiKey
+		? new QuickNodeWithDb(quickNodeApiKey, "Ethereum")
+		: new TenderlyWithDb(tenderlyNodeAccessKeys, "Ethereum", etherscan.geth);
 
 	for (const testCase of cases) {
 		const it = testCase.skip ? test.skip : test;
