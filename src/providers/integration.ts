@@ -25,6 +25,19 @@ type IntegrationFunction<
 	...args: Parameters<RPCFuncWithChain<Target>>
 ) => ReturnType<RPCFuncWithChain<Target>>
 
+// TODO: if `blockNumber` is specified, the database result may be inaccurate
+export const getCode: IntegrationFunction<
+	"getCode"
+> = async function (this, original, address, blockNumber, chain) {
+	let code = await this.db.getCode(address);
+	if (code !== null)
+		return code;
+	code = await original(address, blockNumber, chain);
+	if (code !== null)
+		await this.db.saveCode(address, code);
+	return code;
+}
+
 export const debugTraceTransaction: IntegrationFunction<
 	"debugTraceTransaction",
 	"getTransactionByHash" | "getBlockByNumber"

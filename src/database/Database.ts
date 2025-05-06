@@ -74,6 +74,27 @@ export class Database {
 		return source.manager.getRepository(entity);
 	}
 
+	async getCode(address: Hex.String): Promise<Hex.String | null> {
+		const repo = await this.getRepository(Contract);
+		const entity = await repo.findOne({
+			select: { code: true },
+			where: { address: Hex.removePrefix(Hex.verifyAddress(address)) }
+		});
+		const code = entity?.code;
+		return code == null ? null : Hex.toString(code);
+	}
+
+	async saveCode(address: Hex.String, code: Hex.String): Promise<Contract> {
+		const repo = await this.getRepository(Contract);
+		const addr = Hex.removePrefix(Hex.verifyAddress(address));
+		let entity = await repo.findOne({
+			where: { address: addr }
+		});
+		entity ??= new Contract(addr);
+		entity.code = Buffer.from(Hex.removePrefix(code), "hex");
+		return await repo.save(entity);
+	}
+
 	async getContracts(addresses: Hex.String[]): Promise<Etherscan.ContractCreation[]> {
 		const addrs = addresses.map(a => Hex.removePrefix(Hex.verifyAddress(a)));
 		const repo = await this.getRepository(Contract);
