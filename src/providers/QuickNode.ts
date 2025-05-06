@@ -3,7 +3,7 @@ import { Chain as AllChain, type ChainName } from "../config/Chain";
 import { Database } from "../database";
 import { Hex } from "../utils";
 import { verifyChain, RPC, type DebugTraceProvider } from "./common";
-import { debugTraceTransaction, getCode } from "./integration";
+import { debugTraceTransaction, getCode, getTransactionByHash } from "./integration";
 
 
 const endpoints = {
@@ -135,6 +135,16 @@ export class QuickNodeWithDb extends QuickNode {
 			address, blockNumber, chain
 		);
 	}
+
+	override getTransactionByHash(txHash: Hex.TxHash, chain?: QuickNode.Chain | number) {
+		chain = chain === undefined ? this.chain : AllChain[this.verifyChain(chain)];
+		return getTransactionByHash.call(
+			this,
+			super.getTransactionByHash.bind(this),
+			txHash, chain
+		);
+	}
+
 
 	override debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: QuickNode.Chain | number) {
 		chain = chain === undefined ? this.chain : AllChain[this.verifyChain(chain)];

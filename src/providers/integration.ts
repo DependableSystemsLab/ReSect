@@ -38,6 +38,34 @@ export const getCode: IntegrationFunction<
 	return code;
 }
 
+async function saveBlockIfNotExists(
+	this: IntegrationContext<"getBlockByNumber">,
+	blockNumber: Hex.String,
+	chain: number
+) {
+	if (await this.db.has(Block, new Block(chain, Hex.toNumber(blockNumber))))
+		return;
+	const block = await this.getBlockByNumber(blockNumber, false, chain);
+	if (block == null)
+		throw new Error(`Block ${blockNumber} on chain ${chain} not found`);
+	await this.db.saveBlock(block as RPC.Block, chain);
+}
+
+export const getTransactionByHash: IntegrationFunction<
+	"getTransactionByHash",
+	"getBlockByNumber"
+> = async function (this, original, txHash, chain) {
+	let result = await this.db.getTransaction(txHash);
+	if (result)
+		return result;
+	result = await original(txHash, chain);
+	if (result) {
+		await saveBlockIfNotExists.call(this, result.blockNumber, chain);
+		await this.db.saveTransaction(result);
+	}
+	return result;
+}
+
 export const debugTraceTransaction: IntegrationFunction<
 	"debugTraceTransaction",
 	"getTransactionByHash" | "getBlockByNumber"
@@ -51,12 +79,7 @@ export const debugTraceTransaction: IntegrationFunction<
 			const tx = await this.getTransactionByHash(txHash, chain);
 			if (tx == null)
 				throw new Error(`Transaction ${txHash} not found`);
-			if (!await this.db.has(Block, new Block(chain, Hex.toNumber(tx.blockNumber)))) {
-				const block = await this.getBlockByNumber(tx.blockNumber, false, chain);
-				if (block == null)
-					throw new Error(`Block ${tx.blockHash} not found`);
-				await this.db.saveBlock(block as RPC.Block, chain);
-			}
+			await saveBlockIfNotExists.call(this, tx.blockNumber, chain);
 			await this.db.saveTransaction(tx);
 		}
 		await this.db.saveDebugTrace(result, txHash);

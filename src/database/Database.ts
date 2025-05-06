@@ -117,10 +117,26 @@ export class Database {
 		return await repo.save(entity);
 	}
 
-	async saveTransaction(transaction: RPC.Transaction): Promise<Transaction> {
+	async getTransaction(txHash: Hex.String): Promise<RPC.Transaction | null> {
 		const repo = await this.getRepository(Transaction);
-		const entity = JsonRpcConverter.transactionToEntity(transaction);
-		return await repo.save(entity);
+		const entity = await repo.findOne({
+			where: { hash: Hex.removePrefix(Hex.verifyTxHash(txHash)) },
+			relations: { block: true }
+		});
+		if (entity === null)
+			return null;
+		return JsonRpcConverter.entityToTransaction(entity);
+	}
+
+	saveTransaction(transaction: RPC.Transaction): Promise<Transaction> {
+		return this.saveTransactions([transaction]).then(txs => txs[0]);
+	}
+
+	async saveTransactions(transactions: RPC.Transaction[]): Promise<Transaction[]> {
+		transactions = Array.isArray(transactions) ? transactions : [transactions];
+		const repo = await this.getRepository(Transaction);
+		const entities = transactions.map(JsonRpcConverter.transactionToEntity);
+		return await repo.save(entities);
 	}
 
 	async getDebugTrace(txHash: Hex.String): Promise<RPC.Debug.Trace | null> {

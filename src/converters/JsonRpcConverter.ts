@@ -28,4 +28,23 @@ export namespace JsonRpcConverter {
 			entity.receiver = null;
 		return entity;
 	}
+
+	export function entityToTransaction(entity: Transaction): RPC.Transaction {
+		const tx = {
+			hash: Hex.addPrefix(entity.hash)
+		} as RPC.Transaction;
+		if (entity.chainId)
+			tx.chainId = Hex.toString(entity.chainId);
+		if (entity.blockNumber)
+			tx.blockNumber = Hex.toString(entity.blockNumber);
+		if (entity.blockIndex)
+			tx.transactionIndex = Hex.toString(entity.blockIndex);
+		if (entity.sender)
+			tx.from = Hex.addPrefix(entity.sender);
+		if (entity.receiver)
+			tx.to = Hex.addPrefix(entity.receiver);
+		if (entity.block?.hash)
+			tx.blockHash = Hex.addPrefix(entity.block.hash);
+		return tx;
+	}
 }
