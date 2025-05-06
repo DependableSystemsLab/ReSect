@@ -10,16 +10,16 @@
 	"author": "Yuqi Liu",
 	"license": "MIT",
 	"dependencies": {
-		"@dotenvx/dotenvx": "^1.42.2",
-		"@shazow/whatsabi": "^0.21.0",
+		"@dotenvx/dotenvx": "^1.43.0",
+		"@shazow/whatsabi": "^0.21.1",
 		"basic-type-extensions": "^4.4.0",
-		"fetch-throttler": "^1.1.0",
+		"fetch-throttler": "^1.2.2",
 		"pg": "^8.15.6",
 		"typeorm": "^0.3.22"
 	},
 	"devDependencies": {
 		"@types/jest": "^29.5.14",
-		"@types/node": "^22.14.1",
+		"@types/node": "^22.15.11",
 		"jest": "^29.7.0",
 		"ts-jest": "^29.3.2",
 		"ts-node": "^10.9.2",
