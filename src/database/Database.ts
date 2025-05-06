@@ -117,6 +117,15 @@ export class Database {
 		return await repo.save(entity);
 	}
 
+	async filterTxHashes(txHashes: Hex.String[]): Promise<Hex.TxHash[]> {
+		const repo = await this.getRepository(Transaction);
+		const entities = await repo.find({
+			select: { hash: true },
+			where: { hash: In(txHashes.map(h => Hex.removePrefix(Hex.verifyTxHash(h)))) }
+		});
+		return entities.map(e => Hex.addPrefix(e.hash));
+	}
+
 	async getTransaction(txHash: Hex.String): Promise<RPC.Transaction | null> {
 		const repo = await this.getRepository(Transaction);
 		const entity = await repo.findOne({

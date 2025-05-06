@@ -4,6 +4,7 @@ import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src
 import { Etherscan, QuickNodeWithDb, TenderlyWithDb, type DebugTraceProvider } from "../src/providers";
 import { Reentrancy } from "../src/Reentrancy";
 import type { Hex } from "../src/utils";
+import { Database } from "../src/database";
 
 interface TestCaseBase {
 	name: string;
@@ -29,7 +30,7 @@ describe("Reentrancy Analyzer", () => {
 	const debug = inspector.url() !== undefined;
 	const timeout = debug ? 24 * 60 * 60_000 : 30_000;
 
-	const etherscan = new Etherscan(etherscanApiKey);
+	const etherscan = new Etherscan(etherscanApiKey, Chain.Ethereum, Database.default);
 	const debugProvider: DebugTraceProvider = quickNodeApiKey
 		? new QuickNodeWithDb(quickNodeApiKey, "Ethereum")
 		: new TenderlyWithDb(tenderlyNodeAccessKeys, "Ethereum", etherscan.geth);
