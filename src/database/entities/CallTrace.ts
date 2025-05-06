@@ -17,6 +17,9 @@ export class CallTrace {
 	@Column("smallint")
 	depth?: number;
 
+	@Column("integer", { name: "level_index" })
+	levelIndex?: number;
+
 	@Column("character", { length: 40 })
 	from?: Hex.AddressNP;
 
@@ -83,12 +86,6 @@ export class CallTrace {
 	)
 	children?: CallTrace[];
 
-	get levelIndex(): number | undefined {
-		return this.parentIndex === undefined ? undefined
-			: this.parentIndex === null ? this.index
-				: this.index - this.parentIndex - 1;
-	}
-
 	get selector(): Hex.Selector | null | undefined {
 		if (this.input === undefined || this.type === undefined)
 			return undefined;
@@ -100,16 +97,14 @@ export class CallTrace {
 	}
 
 	get stack(): number[] | undefined {
-		const levelIdx = this.levelIndex;
-		if (levelIdx === undefined)
+		if (this.levelIndex === undefined)
 			return undefined;
-		const result: number[] = [levelIdx];
+		const result: number[] = [this.levelIndex];
 		let parent: CallTrace | null | undefined = this.parent;
-		while (parent) {
-			const levelIdx = parent.levelIndex;
-			if (levelIdx === undefined)
+		while (parent !== null) {
+			if (parent?.levelIndex === undefined)
 				return undefined;
-			result.push(levelIdx);
+			result.push(parent.levelIndex);
 			parent = parent.parent;
 		}
 		return result.reverse();
@@ -132,6 +127,15 @@ export class CallTrace {
 		else {
 			value = Hex.toString(value);
 			this.output = Buffer.from(Hex.removePrefix(value), "hex");
+		}
+	}
+
+	constructor();
+	constructor(txHash: Hex.TxHash | Hex.TxHashNP, index: number);
+	constructor(txHash?: Hex.TxHash | Hex.TxHashNP, index?: number) {
+		if (txHash != null && index != null) {
+			this.txHash = Hex.removePrefix(txHash);
+			this.index = index;
 		}
 	}
 }

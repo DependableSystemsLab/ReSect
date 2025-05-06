@@ -128,28 +128,29 @@ export namespace TraceConverter {
 
 	function* _debugTraceToEntities(
 		debugTrace: RPC.Debug.Trace,
-		depth: number, levelIndex: number, parentIndex: number | null
+		entity: Entity,
+		ctx: { index: number }
 	): Generator<Entity> {
-		const trace = new Entity();
-		trace.parentIndex = parentIndex;
-		trace.index = parentIndex === null ? levelIndex : parentIndex + levelIndex + 1;
-		trace.depth = depth;
-		_setEntityFromTrace(trace, debugTrace);
-		yield trace;
+		_setEntityFromTrace(entity, debugTrace);
+		yield entity;
 		if (debugTrace.calls?.length) {
 			for (let i = 0; i < debugTrace.calls.length; i++) {
-				const child = debugTrace.calls[i];
-				yield* _debugTraceToEntities(child, depth + 1, i, trace.index);
+				const childTrace = debugTrace.calls[i];
+				const childEntity = new Entity(entity.txHash, ++ctx.index);
+				childEntity.depth = entity.depth! + 1;
+				childEntity.levelIndex = i;
+				childEntity.parentIndex = entity.index;
+				yield* _debugTraceToEntities(childTrace, childEntity, ctx);
 			}
 		}
 	}
 
 	export function debugTraceToEntities(debugTrace: RPC.Debug.Trace, txHash: Hex.String): Entity[] {
 		const hash = Hex.removePrefix(Hex.verifyTxHash(txHash));
-		const traces = Array.from(_debugTraceToEntities(debugTrace, 0, 0, null));
-		for (const trace of traces)
-			trace.txHash = hash;
-		return traces;
+		const root = new Entity(hash, 0);
+		root.depth = root.levelIndex = 0;
+		root.parentIndex = null;
+		return Array.from(_debugTraceToEntities(debugTrace, root, { index: 0 }));
 	}
 
 	export function entityToDebugTrace(entity: Entity): RPC.Debug.Trace {
