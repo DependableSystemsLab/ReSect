@@ -1,8 +1,8 @@
-import { Chain as AllChain, chainNames, type ChainName } from "../config/Chain";
+import { Chain as AllChain, type ChainName } from "../config/Chain";
 import type { TenderlyApiKeys } from "../config/credentials";
 import { Database } from "../database";
 import { verifyCallTypes, Hex, type Trace, type DebugTrace } from "../utils";
-import { getDebugTraceWithDb, RPC, type DebugTraceProvider, type DbExtensionContext } from "./base";
+import { getDebugTraceWithDb, verifyChain, RPC, type DebugTraceProvider, type DbExtensionContext } from "./base";
 
 
 const endpoints = {
@@ -30,77 +30,50 @@ const endpoints = {
 	zkSyncSepolia: "zksync-sepolia"
 } satisfies Partial<Record<ChainName, string>>;
 
-export class Tenderly implements DebugTraceProvider<DebugTrace<Trace>> {
-	private static _rpcId = 0;
+export class Tenderly
+	extends RPC.MultiChainProviderBase<Tenderly.Chain>
+	implements DebugTraceProvider<DebugTrace<Trace>> {
 
 	readonly #apiKeys: TenderlyApiKeys;
-	#chain: Tenderly.Chain;
+	#chainName: Tenderly.Chain;
 
 	constructor(chain: Tenderly.Chain | number, accessKey: string)
 	constructor(apiKeys: TenderlyApiKeys, defaultChain?: Tenderly.Chain)
 	constructor(param1: Tenderly.Chain | number | TenderlyApiKeys, param2?: string) {
+		super();
 		if (typeof param1 !== "object")
 			param1 = this.verifyChain(param1);
-		[this.#apiKeys, this.#chain] = typeof param1 === "object"
+		[this.#apiKeys, this.#chainName] = typeof param1 === "object"
 			? [param1, this.verifyChain((param2 ?? "Ethereum") as Tenderly.Chain)]
 			: [{ [param1]: param2! }, param1];
 	}
 
-	get chain(): Tenderly.Chain {
-		return this.#chain;
+	override get name(): string {
+		return "Tenderly";
 	}
-	set chain(chain: Tenderly.Chain) {
-		this.#chain = this.verifyChain(chain);
+	get chainName(): Tenderly.Chain {
+		return this.#chainName;
 	}
-	get chainId(): number {
-		return AllChain[this.#chain];
+	set chainName(chain: Tenderly.Chain) {
+		this.#chainName = this.verifyChain(chain);
 	}
-	set chainId(chainId: number) {
-		this.#chain = this.verifyChain(chainId);
+	get chain(): number {
+		return AllChain[this.#chainName];
+	}
+	set chain(chainId: number) {
+		this.#chainName = this.verifyChain(chainId);
 	}
 
 	protected verifyChain(chain: Tenderly.Chain | number): Tenderly.Chain {
-		if (typeof chain === "number") {
-			const name = chainNames.get(chain);
-			if (!name)
-				throw new Error(`Invalid chain ID: ${chain}`);
-			if (!Tenderly.supports(name))
-				throw new Error(`Tenderly does not support ${name}`);
-			chain = name;
-		}
+		chain = verifyChain(chain, endpoints, "Tenderly");
 		if (!(chain in this.#apiKeys))
 			throw new Error(`API key for ${chain} is not set`);
 		return chain;
 	}
 
 	protected getUrl(chain?: Tenderly.Chain | number): string {
-		chain = chain === undefined ? this.#chain : this.verifyChain(chain);
+		chain = chain === undefined ? this.#chainName : this.verifyChain(chain);
 		return `https://${endpoints[chain]}.gateway.tenderly.co/${this.#apiKeys[chain]}`;
-	}
-
-	async #request<T>(method: string, params: unknown[], chain?: Tenderly.Chain | number): Promise<T> {
-		const result = await fetch(this.getUrl(chain), {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json"
-			},
-			body: JSON.stringify({
-				jsonrpc: "2.0",
-				id: Tenderly._rpcId++,
-				method,
-				params
-			})
-		});
-		if (!result.ok) {
-			const text = await result.text();
-			throw new Error(`Tenderly API error: ${text}`);
-		}
-		const json = await result.json() as RPC.Response<T> | RPC.Error;
-		if ("error" in json) {
-			const error = json.error;
-			throw new Error(`Tenderly API error: ${error.message} (${error.slug})`);
-		}
-		return json.result;
 	}
 
 	getDebugTrace(txHash: Hex.String, chain?: Tenderly.Chain | number): Promise<DebugTrace<Trace>> {
@@ -114,7 +87,7 @@ export class Tenderly implements DebugTraceProvider<DebugTrace<Trace>> {
 		chain?: Tenderly.Chain | number
 	): Promise<DebugTrace<Trace>> {
 		Hex.verifyTxHash(txHash);
-		const trace = await this.#request<Tenderly.DebugTraceRaw>("debug_traceTransaction", [txHash, { tracer, onlyTopCall }], chain);
+		const trace = await this.request<Tenderly.DebugTraceRaw>("debug_traceTransaction", [txHash, { tracer, onlyTopCall }], chain);
 		return verifyCallTypes(trace);
 	}
 }
@@ -150,7 +123,7 @@ export class TenderlyWithDb extends Tenderly {
 	}
 
 	override async getDebugTrace(txHash: Hex.TxHash, chain?: Tenderly.Chain | number) {
-		chain = chain === undefined ? this.chainId : AllChain[this.verifyChain(chain)];
+		chain = chain === undefined ? this.chain : AllChain[this.verifyChain(chain)];
 		return getDebugTraceWithDb.call(this.#ctx, txHash, chain);
 	}
 }

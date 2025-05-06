@@ -1,5 +1,26 @@
+import { chainNames, type ChainName } from "../config/Chain";
 import { Block, Database, Transaction } from "../database";
 import { Hex, type CallTrace, type DebugTrace, type MinimalTrace, type Trace } from "../utils";
+
+
+export function verifyChain<T extends ChainName = ChainName>(
+	chain: string | number,
+	chains: T[] | Record<T, any>,
+	serviceName?: string
+): T {
+	if (typeof chain === "number") {
+		const name = chainNames.get(chain);
+		if (!name)
+			throw new Error(`Invalid chain ID: ${chain}`);
+		chain = name;
+	}
+	if (typeof chain !== "string")
+		throw new TypeError(`Invalid chain name: ${chain}`);
+	const exists = Array.isArray(chains) ? chains.includes(chain as T) : chain in chains;
+	if (!exists)
+		throw new Error(serviceName ? `Service ${serviceName} does not support ${chain}` : `Chain ${chain} not supported`);
+	return chain as T;
+}
 
 export interface TraceProvider<T extends MinimalTrace = MinimalTrace> {
 	getCallTraces(txHash: Hex.TxHash, chain?: number): Promise<CallTrace<T>[]>;
@@ -125,6 +146,39 @@ export namespace RPC {
 		? (...args: [...Parameters<Provider[M]>, chain?: number]) => R
 		: Provider[M];
 	} & { chain: number };
+
+	export abstract class MultiChainProviderBase<N extends ChainName = ChainName> {
+		static #rpcId = 0;
+
+		abstract readonly name: string;
+
+		protected abstract getUrl(chain?: N | number): string;
+
+		protected async request<T>(method: string, params: unknown[], chain?: N | number): Promise<T> {
+			const result = await fetch(this.getUrl(chain), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json"
+				},
+				body: JSON.stringify({
+					jsonrpc: "2.0",
+					id: MultiChainProviderBase.#rpcId++,
+					method,
+					params
+				})
+			});
+			if (!result.ok) {
+				const text = await result.text();
+				throw new Error(`${this.name} API error: ${text}`);
+			}
+			const json = await result.json() as RPC.Response<T> | RPC.Error;
+			if ("error" in json) {
+				const error = json.error;
+				throw new Error(`${this.name} API error: ${error.message} (${error.slug})`);
+			}
+			return json.result;
+		}
+	}
 
 	const blockTags = ["earliest", "latest", "safe", "finalized", "pending"] as const satisfies BlockTag[];
 
