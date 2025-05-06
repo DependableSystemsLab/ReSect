@@ -84,13 +84,13 @@ export class Database {
 		return code == null ? null : Hex.toString(code);
 	}
 
-	async saveCode(address: Hex.String, code: Hex.String): Promise<Contract> {
+	async saveCode(address: Hex.String, code: Hex.String, chainId: number): Promise<Contract> {
 		const repo = await this.getRepository(Contract);
 		const addr = Hex.removePrefix(Hex.verifyAddress(address));
 		let entity = await repo.findOne({
 			where: { address: addr }
 		});
-		entity ??= new Contract(addr);
+		entity ??= new Contract(addr, chainId);
 		entity.code = Buffer.from(Hex.removePrefix(code), "hex");
 		return await repo.save(entity);
 	}
@@ -100,14 +100,14 @@ export class Database {
 		const repo = await this.getRepository(Contract);
 		const entities = await repo.find({
 			where: { address: In(addrs) },
-			relations: { creationBlock: true }
+			relations: { creationTransaction: { block: true } }
 		});
 		return entities.map(EtherscanConverter.entityToContractCreation);
 	}
 
-	async saveContracts(contracts: Etherscan.ContractCreation[]): Promise<Contract[]> {
+	async saveContracts(contracts: Etherscan.ContractCreation[], chainId: number): Promise<Contract[]> {
 		const repo = await this.getRepository(Contract);
-		const entities = contracts.map(EtherscanConverter.contractCreationToEntity);
+		const entities = contracts.map(c => EtherscanConverter.contractCreationToEntity(c, chainId));
 		return await repo.save(entities);
 	}
 

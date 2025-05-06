@@ -3,8 +3,8 @@ import { Etherscan } from "../providers";
 import { Hex, type NumStr } from "../utils";
 
 export namespace EtherscanConverter {
-	export function contractCreationToEntity(creation: Etherscan.ContractCreation): Contract {
-		const entity = new Contract(creation.contractAddress);
+	export function contractCreationToEntity(creation: Etherscan.ContractCreation, chainId: number): Contract {
+		const entity = new Contract(creation.contractAddress, chainId);
 		entity.creationTxHash = Hex.removePrefix(creation.txHash);
 		entity.creator = Hex.removePrefix(creation.contractCreator);
 		if (creation.contractFactory !== "")

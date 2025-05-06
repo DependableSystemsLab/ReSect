@@ -34,7 +34,7 @@ export const getCode: IntegrationFunction<
 		return code;
 	code = await original(address, blockNumber, chain);
 	if (code !== null)
-		await this.db.saveCode(address, code);
+		await this.db.saveCode(address, code, chain);
 	return code;
 }
 

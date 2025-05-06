@@ -1,7 +1,7 @@
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
+import { Column, Entity, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
 import { Hex } from "../../utils";
 import type { Block } from "./Block";
-import type { Chain } from "./Chain";
+import { Chain } from "./Chain";
 import { Transaction } from "./Transaction";
 
 
@@ -9,6 +9,9 @@ import { Transaction } from "./Transaction";
 export class Contract {
 	@PrimaryColumn("character", { length: 40 })
 	address!: Hex.AddressNP;
+
+	@PrimaryColumn("integer", { name: "chain_id" })
+	chainId!: number;
 
 	@Column("bytea", { nullable: true })
 	code?: Buffer | null;
@@ -34,23 +37,19 @@ export class Contract {
 	contractFactory?: Hex.AddressNP | null;
 
 	@ManyToOne(
+		() => Chain,
+		{ persistence: false }
+	)
+	@JoinColumn({ name: "chain_id" })
+	chain?: Chain;
+
+	@ManyToOne(
 		() => Transaction,
 		t => t.createdContracts,
 		{ persistence: false }
 	)
 	@JoinColumn({ name: "creation_tx_hash" })
 	creationTransaction?: Transaction | null;
-
-	@ManyToOne(
-		() => Contract,
-		{ persistence: false }
-	)
-	@JoinColumn({ name: "contract_factory" })
-	contractFactoryAddress?: Contract | null;
-
-	get chain(): Chain | undefined {
-		return this.creationTransaction?.block?.chain;
-	}
 
 	get creationBlock(): Block | null | undefined {
 		return this.creationTransaction == null
@@ -59,9 +58,11 @@ export class Contract {
 	}
 
 	constructor();
-	constructor(address: Hex.AddressNP | Hex.Address);
-	constructor(address?: Hex.AddressNP | Hex.Address) {
-		if (address !== undefined)
+	constructor(address: Hex.AddressNP | Hex.Address, chainId: number);
+	constructor(address?: Hex.AddressNP | Hex.Address, chainId?: number) {
+		if (address !== undefined && chainId !== undefined) {
 			this.address = Hex.removePrefix(address);
+			this.chainId = chainId;
+		}
 	}
 }
