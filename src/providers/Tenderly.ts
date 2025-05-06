@@ -2,7 +2,8 @@ import { Chain as AllChain, type ChainName } from "../config/Chain";
 import type { TenderlyApiKeys } from "../config/credentials";
 import { Database } from "../database";
 import { verifyCallTypes, Hex } from "../utils";
-import { getDebugTraceWithDb, verifyChain, RPC, type DebugTraceProvider, type DbExtensionContext } from "./base";
+import { verifyChain, RPC, type DebugTraceProvider } from "./common";
+import { getDebugTraceWithDb, type DbExtensionContext } from "./integration";
 
 
 const endpoints = {

@@ -2,7 +2,7 @@ import "basic-type-extensions";
 import { createThrottledFetch } from "fetch-throttler";
 import { Arrayable } from "type-fest";
 import { toURLSearchParams, Hex, type QueryObject, type NumStr } from "../utils";
-import type { RPC } from "./base";
+import type { RPC } from "./common";
 import type { EtherscanApiKey } from "../config/credentials";
 import type { Database } from "../database";
 
