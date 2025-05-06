@@ -1,5 +1,4 @@
 import { Chain as AllChain, type ChainName } from "../config/Chain";
-import type { QuickNodeApiKey } from "../config/credentials";
 import { Database } from "../database";
 import { Hex } from "../utils";
 import { verifyChain, RPC, type DebugTraceProvider } from "./common";
@@ -50,7 +49,7 @@ export class QuickNode
 	#chainName: QuickNode.Chain;
 
 	constructor(
-		readonly apiKey: QuickNodeApiKey,
+		readonly apiKey: QuickNode.ApiKey,
 		chain?: QuickNode.Chain | number
 	) {
 		super();
@@ -110,7 +109,7 @@ export class QuickNodeWithDb extends QuickNode {
 	readonly db: Database;
 
 	constructor(
-		apiKey: QuickNodeApiKey,
+		apiKey: QuickNode.ApiKey,
 		chain: QuickNode.Chain | number,
 		db?: Database
 	) {
@@ -145,4 +144,6 @@ export namespace QuickNode {
 	export function supports(chain: string): chain is Chain {
 		return chain in endpoints;
 	}
+
+	export type ApiKey = Readonly<[endpoint: string, token: string]>;
 }

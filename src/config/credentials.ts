@@ -1,4 +1,4 @@
-import { Etherscan, Tenderly } from "../providers";
+import { Etherscan, Tenderly, type QuickNode } from "../providers";
 import { Chain } from "./Chain";
 
 const {
@@ -22,17 +22,16 @@ const apiTier: Etherscan.APITier = (() => {
 	}
 })();
 
-export type EtherscanApiKey = [key: string, tier?: Etherscan.APITier];
-export const etherscanApiKey = Object.freeze([etherscanApiKey_, apiTier] as EtherscanApiKey);
+export const etherscanApiKey: Etherscan.ApiKey =
+	Object.freeze([etherscanApiKey_, apiTier] as const);
 
 const {
 	QUICKNODE_ENDPOINT: qnEndpoint,
 	QUICKNODE_TOKEN: qnToken
 } = process.env;
 
-export type QuickNodeApiKey = [endpoint: string, token: string];
 export const quickNodeApiKey = qnEndpoint && qnToken
-	? Object.freeze([qnEndpoint, qnToken] as QuickNodeApiKey)
+	? Object.freeze([qnEndpoint, qnToken]) as QuickNode.ApiKey
 	: undefined;
 
 const tenderlyKeyPrefix = "TENDERLY_ACCESS_KEY_";
@@ -50,7 +49,6 @@ const tenderlyKeys = Object.keys(process.env)
 		if (!Tenderly.supports(chain))
 			throw new Error(`Tenderly does not support ${chain} (${name})`);
 		return [chain, value] as const;
-	})
+	});
 
-export type TenderlyApiKeys = Readonly<Partial<Record<Tenderly.Chain, string>>>;
-export const tenderlyNodeAccessKeys: TenderlyApiKeys = Object.freeze(Object.fromEntries(tenderlyKeys));
+export const tenderlyNodeAccessKeys: Tenderly.ApiKeys = Object.freeze(Object.fromEntries(tenderlyKeys));

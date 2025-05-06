@@ -1,14 +1,14 @@
 import "basic-type-extensions";
 import { createThrottledFetch } from "fetch-throttler";
 import { Arrayable } from "type-fest";
-import { toURLSearchParams, Hex, type QueryObject, type NumStr } from "../utils";
+import { Chain } from "../config/Chain";
 import type { RPC } from "./common";
-import type { EtherscanApiKey } from "../config/credentials";
 import type { Database } from "../database";
+import { toURLSearchParams, Hex, type QueryObject, type NumStr } from "../utils";
 
 
 const fetchInstances = new Map<string, typeof fetch>();
-function getFetch(apiKey: string | Readonly<EtherscanApiKey>) {
+function getFetch(apiKey: string | Etherscan.ApiKey) {
 	const [key, tier = Etherscan.APITier.Free] = typeof apiKey == "string" ? [apiKey] : apiKey;
 	let fetchInst = fetchInstances.get(key);
 	if (!fetchInst) {
@@ -44,7 +44,7 @@ export class Etherscan {
 	readonly geth: Etherscan.Geth;
 
 	constructor(
-		apiKey: string | Readonly<EtherscanApiKey>,
+		apiKey: string | Etherscan.ApiKey,
 		chainId: number = 1,
 		database?: Database
 	) {
@@ -232,7 +232,9 @@ export namespace Etherscan {
 		ProPlus
 	}
 
-	export const rateLimits: Record<Etherscan.APITier, [perSecond: number, perDay: number]> = {
+	export type ApiKey = Readonly<[key: string, tier?: APITier]>;
+
+	export const rateLimits: Record<APITier, [perSecond: number, perDay: number]> = {
 		[Etherscan.APITier.Free]: [5, 100_000],
 		[Etherscan.APITier.Standard]: [10, 200_000],
 		[Etherscan.APITier.Advanced]: [20, 500_000],
@@ -309,8 +311,8 @@ export namespace Etherscan {
 		readonly apiKey: string;
 
 		constructor(
-			apiKey: string | Readonly<EtherscanApiKey>,
-			public chain: number = 1
+			apiKey: string | Etherscan.ApiKey,
+			public chain: number = Chain.Ethereum
 		) {
 			[this.apiKey, this.#fetch] = getFetch(apiKey);
 		}

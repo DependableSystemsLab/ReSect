@@ -1,5 +1,4 @@
 import { Chain as AllChain, type ChainName } from "../config/Chain";
-import type { TenderlyApiKeys } from "../config/credentials";
 import { Database } from "../database";
 import { verifyCallTypes, Hex } from "../utils";
 import { verifyChain, RPC, type DebugTraceProvider } from "./common";
@@ -35,12 +34,12 @@ export class Tenderly
 	extends RPC.MultiChainProviderBase<Tenderly.Chain>
 	implements RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.TraceInfo> {
 
-	readonly #apiKeys: TenderlyApiKeys;
+	readonly #apiKeys: Tenderly.ApiKeys;
 	#chainName: Tenderly.Chain;
 
 	constructor(chain: Tenderly.Chain | number, accessKey: string)
-	constructor(apiKeys: TenderlyApiKeys, defaultChain?: Tenderly.Chain)
-	constructor(param1: Tenderly.Chain | number | TenderlyApiKeys, param2?: string) {
+	constructor(apiKeys: Tenderly.ApiKeys, defaultChain?: Tenderly.Chain)
+	constructor(param1: Tenderly.Chain | number | Tenderly.ApiKeys, param2?: string) {
 		super();
 		if (typeof param1 !== "object")
 			param1 = this.verifyChain(param1);
@@ -102,13 +101,13 @@ export class TenderlyWithDb extends Tenderly {
 		db?: Database
 	)
 	constructor(
-		apiKeys: TenderlyApiKeys,
+		apiKeys: Tenderly.ApiKeys,
 		defaultChain: Tenderly.Chain,
 		provider: RPC.MultiChainProvider,
 		db?: Database
 	)
 	constructor(
-		param1: Tenderly.Chain | number | TenderlyApiKeys,
+		param1: Tenderly.Chain | number | Tenderly.ApiKeys,
 		param2: string,
 		provider: RPC.MultiChainProvider,
 		db?: Database
@@ -139,6 +138,8 @@ export namespace Tenderly {
 	export function supports(chain: string): chain is Chain {
 		return chain in endpoints;
 	}
+
+	export type ApiKeys = Readonly<Partial<Record<Chain, string>>>;
 
 	export type DebugTraceRaw = Omit<RPC.Debug.Trace, "type" | "calls"> & {
 		type: string;
