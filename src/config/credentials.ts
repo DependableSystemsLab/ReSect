@@ -1,4 +1,4 @@
-import { Etherscan, Tenderly, type QuickNode } from "../providers";
+import { Etherscan, QuickNode, Tenderly } from "../providers";
 import { Chain } from "./Chain";
 
 const {
@@ -27,11 +27,23 @@ export const etherscanApiKey: Etherscan.ApiKey =
 
 const {
 	QUICKNODE_ENDPOINT: qnEndpoint,
-	QUICKNODE_TOKEN: qnToken
+	QUICKNODE_TOKEN: qnToken,
+	QUICKNODE_PLAN: qnPlan_ = "Free"
 } = process.env;
 
+const qnPlan: QuickNode.Plan = (() => {
+	switch (qnPlan_.toLowerCase()) {
+		case "free": return QuickNode.Plan.Free;
+		case "build": return QuickNode.Plan.Build;
+		case "accelerate": return QuickNode.Plan.Accelerate;
+		case "scale": return QuickNode.Plan.Scale;
+		case "business": return QuickNode.Plan.Business;
+		default: throw new Error(`Invalid QUICKNODE_PLAN: ${qnPlan_}`);
+	}
+})();
+
 export const quickNodeApiKey = qnEndpoint && qnToken
-	? Object.freeze([qnEndpoint, qnToken]) as QuickNode.ApiKey
+	? Object.freeze([qnEndpoint, qnToken, qnPlan]) as QuickNode.ApiKey
 	: undefined;
 
 const tenderlyKeyPrefix = "TENDERLY_ACCESS_KEY_";

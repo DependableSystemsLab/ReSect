@@ -1,3 +1,4 @@
+import { createThrottledFetch, type Fetch } from "fetch-throttler";
 import { Chain as AllChain, type ChainName } from "../config/Chain";
 import { Database } from "../database";
 import { Hex } from "../utils";
@@ -46,13 +47,22 @@ const endpoints = {
 export class QuickNode
 	extends RPC.MultiChainProviderBase<QuickNode.Chain>
 	implements RPC.MultiChainProvider, RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.Trace> {
+	static readonly #fetchInsts = new Map<string, Fetch>();
 	#chainName: QuickNode.Chain;
 
 	constructor(
 		readonly apiKey: QuickNode.ApiKey,
 		chain?: QuickNode.Chain | number
 	) {
-		super();
+		if (!QuickNode.#fetchInsts.has(apiKey[0])) {
+			const fetch = createThrottledFetch({
+				interval: 1000,
+				maxConcurrency: QuickNode.rateLimits[apiKey[2] ?? QuickNode.Plan.Free],
+				maxRetry: 2
+			});
+			QuickNode.#fetchInsts.set(apiKey[0], fetch);
+		}
+		super(QuickNode.#fetchInsts.get(apiKey[0])!);
 		this.#chainName = chain ? this.verifyChain(chain) : "Ethereum";
 	}
 
@@ -145,5 +155,21 @@ export namespace QuickNode {
 		return chain in endpoints;
 	}
 
-	export type ApiKey = Readonly<[endpoint: string, token: string]>;
+	export enum Plan {
+		Free,
+		Build,
+		Accelerate,
+		Scale,
+		Business
+	}
+
+	export type ApiKey = Readonly<[endpoint: string, token: string, plan?: Plan]>;
+
+	export const rateLimits: Record<Plan, number> = {
+		[Plan.Free]: 15,
+		[Plan.Build]: 50,
+		[Plan.Accelerate]: 125,
+		[Plan.Scale]: 250,
+		[Plan.Business]: 500
+	};
 }

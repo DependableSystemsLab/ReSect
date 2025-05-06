@@ -1,3 +1,4 @@
+import type { Fetch } from "fetch-throttler";
 import { chainNames, type ChainName } from "../config/Chain";
 import { Hex, type CallTrace, type DebugTrace, type MinimalTrace } from "../utils";
 
@@ -121,12 +122,17 @@ export namespace RPC {
 	export abstract class MultiChainProviderBase<N extends ChainName = ChainName> {
 		static #rpcId = 0;
 
+		#fetch: Fetch;
 		abstract readonly name: string;
+
+		constructor(fetch: Fetch = globalThis.fetch) {
+			this.#fetch = fetch;
+		}
 
 		protected abstract getUrl(chain?: N | number): string;
 
 		protected async request<T>(method: string, params: unknown[], chain?: N | number): Promise<T> {
-			const result = await fetch(this.getUrl(chain), {
+			const result = await this.#fetch(this.getUrl(chain), {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json"
