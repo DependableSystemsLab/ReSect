@@ -17,13 +17,13 @@ export namespace JsonRpcConverter {
 		return entity;
 	}
 
-	export function transactionToEntity(transaction: RPC.Transaction): Transaction {
+	export function transactionToEntity(transaction: RPC.Transaction, chainId: number): Transaction {
 		const entity = new Transaction(transaction.hash);
-		entity.chainId = Hex.toNumber(transaction.chainId);
+		entity.chainId = chainId;
 		entity.blockNumber = Hex.toNumber(transaction.blockNumber);
 		entity.blockIndex = Hex.toNumber(transaction.transactionIndex);
 		entity.sender = Hex.removePrefix(transaction.from);
-		entity.receiver = Hex.removePrefix(transaction.to);
+		entity.receiver = transaction.to === null ? null : Hex.removePrefix(transaction.to);
 		if (entity.receiver === "")
 			entity.receiver = null;
 		return entity;
@@ -33,8 +33,6 @@ export namespace JsonRpcConverter {
 		const tx = {
 			hash: Hex.addPrefix(entity.hash)
 		} as RPC.Transaction;
-		if (entity.chainId)
-			tx.chainId = Hex.toString(entity.chainId);
 		if (entity.blockNumber)
 			tx.blockNumber = Hex.toString(entity.blockNumber);
 		if (entity.blockIndex)

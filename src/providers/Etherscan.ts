@@ -163,6 +163,7 @@ export class Etherscan {
 	async getContractCreation(contractAddresses: Arrayable<Hex.String>, chain?: number): Promise<(Etherscan.ContractCreation | undefined)[]> {
 		if (!Array.isArray(contractAddresses))
 			contractAddresses = [contractAddresses];
+		chain ??= this.#chainId;
 		const addresses = contractAddresses.map(Hex.verifyAddress);
 		const results = new Map<string, Etherscan.ContractCreation>();
 		if (this.#db) {
@@ -180,10 +181,10 @@ export class Etherscan {
 			const slices = new Array(Math.ceil(contractAddresses.length / 5));
 			for (let i = 0; i < contractAddresses.length; i += 5)
 				slices[i / 5] = contractAddresses.slice(i, i + 5);
-			await slices.forEachAsync(slice => {
+			await slices.forEachAsync(slice =>
 				this.#request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses: slice })
-					.then(rs => rs.forEach(c => results.set(c.contractAddress, c)));
-			});
+					.then(rs => rs.forEach(c => results.set(c.contractAddress, c)))
+			);
 		}
 		if (this.#db) {
 			const newCreations = contractAddresses.map(c => results.get(c as string)).filter(c => c !== undefined);
@@ -196,7 +197,7 @@ export class Etherscan {
 					if (txs[i] == null)
 						throw new Error(`Transaction ${missing[i]} not found`);
 				}
-				await this.#db.saveTransactions(txs as RPC.Transaction[]);
+				await this.#db.saveTransactions(txs as RPC.Transaction[], chain);
 			}
 			if (newCreations.length > 0)
 				await this.#db.saveContracts(newCreations, chain ?? this.#chainId);

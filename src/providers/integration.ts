@@ -61,7 +61,7 @@ export const getTransactionByHash: IntegrationFunction<
 	result = await original(txHash, chain);
 	if (result) {
 		await saveBlockIfNotExists.call(this, result.blockNumber, chain);
-		await this.db.saveTransaction(result);
+		await this.db.saveTransaction(result, chain);
 	}
 	return result;
 }
@@ -80,7 +80,7 @@ export const debugTraceTransaction: IntegrationFunction<
 			if (tx == null)
 				throw new Error(`Transaction ${txHash} not found`);
 			await saveBlockIfNotExists.call(this, tx.blockNumber, chain);
-			await this.db.saveTransaction(tx);
+			await this.db.saveTransaction(tx, chain);
 		}
 		await this.db.saveDebugTrace(result, txHash);
 	}

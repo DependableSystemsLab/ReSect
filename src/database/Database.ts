@@ -1,5 +1,5 @@
 import { Promisable } from "type-fest";
-import { DataSource, In, type DataSourceOptions, type EntityTarget, type ObjectLiteral } from "typeorm";
+import { DataSource, In, IsNull, Not, type DataSourceOptions, type EntityTarget, type ObjectLiteral } from "typeorm";
 import { Block, CallTrace, Contract, Transaction } from "./entities";
 import { typeormConfig } from "../config/typeorm";
 import { EtherscanConverter, JsonRpcConverter, TraceConverter } from "../converters";
@@ -99,7 +99,10 @@ export class Database {
 		const addrs = addresses.map(a => Hex.removePrefix(Hex.verifyAddress(a)));
 		const repo = await this.getRepository(Contract);
 		const entities = await repo.find({
-			where: { address: In(addrs) },
+			where: {
+				address: In(addrs),
+				creationTxHash: Not(IsNull())
+			},
 			relations: { creationTransaction: { block: true } }
 		});
 		return entities.map(EtherscanConverter.entityToContractCreation);
@@ -137,14 +140,14 @@ export class Database {
 		return JsonRpcConverter.entityToTransaction(entity);
 	}
 
-	saveTransaction(transaction: RPC.Transaction): Promise<Transaction> {
-		return this.saveTransactions([transaction]).then(txs => txs[0]);
+	saveTransaction(transaction: RPC.Transaction, chainId: number): Promise<Transaction> {
+		return this.saveTransactions([transaction], chainId).then(txs => txs[0]);
 	}
 
-	async saveTransactions(transactions: RPC.Transaction[]): Promise<Transaction[]> {
+	async saveTransactions(transactions: RPC.Transaction[], chainId: number): Promise<Transaction[]> {
 		transactions = Array.isArray(transactions) ? transactions : [transactions];
 		const repo = await this.getRepository(Transaction);
-		const entities = transactions.map(JsonRpcConverter.transactionToEntity);
+		const entities = transactions.map(t => JsonRpcConverter.transactionToEntity(t, chainId));
 		return await repo.save(entities);
 	}
 

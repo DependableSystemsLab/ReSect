@@ -93,12 +93,11 @@ export namespace RPC {
 		hash: Hex.TxHash;
 		input: Hex.String;
 		nonce: Hex.String;
-		to: Hex.Address;
+		to: Hex.Address | null;
 		transactionIndex: Hex.String;
 		value: Hex.String;
 		type: Hex.String;
 		accessList: Hex.String[];
-		chainId: Hex.String;
 		v: Hex.String;
 		r: Hex.String;
 		s: Hex.String;

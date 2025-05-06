@@ -37,15 +37,16 @@ export class Tenderly
 	readonly #apiKeys: Tenderly.ApiKeys;
 	#chainName: Tenderly.Chain;
 
-	constructor(chain: Tenderly.Chain | number, accessKey: string)
-	constructor(apiKeys: Tenderly.ApiKeys, defaultChain?: Tenderly.Chain)
+	constructor(chain: Tenderly.Chain | number, accessKey: string);
+	constructor(apiKeys: Tenderly.ApiKeys, defaultChain?: Tenderly.Chain);
 	constructor(param1: Tenderly.Chain | number | Tenderly.ApiKeys, param2?: string) {
 		super();
 		if (typeof param1 !== "object")
 			param1 = this.verifyChain(param1);
-		[this.#apiKeys, this.#chainName] = typeof param1 === "object"
-			? [param1, this.verifyChain((param2 ?? "Ethereum") as Tenderly.Chain)]
-			: [{ [param1]: param2! }, param1];
+		this.#apiKeys = typeof param1 === "object" ? param1 : { [param1]: param2! };
+		this.#chainName = typeof param1 === "object"
+			? this.verifyChain(param2 as Tenderly.Chain ?? "Ethereum")
+			: this.verifyChain(param1);
 	}
 
 	override get name(): string {
@@ -77,7 +78,7 @@ export class Tenderly
 	}
 
 	getDebugTrace(txHash: Hex.String, chain?: Tenderly.Chain | number) {
-		return this.debugTraceTransaction(txHash, {}, chain);
+		return this.debugTraceTransaction(txHash, { tracer: "callTracer" }, chain);
 	}
 
 	async debugTraceTransaction(
@@ -99,16 +100,16 @@ export class TenderlyWithDb extends Tenderly {
 		accessKey: string,
 		provider: RPC.MultiChainProvider,
 		db?: Database
-	)
+	);
 	constructor(
 		apiKeys: Tenderly.ApiKeys,
-		defaultChain: Tenderly.Chain,
+		defaultChain: Tenderly.Chain | undefined,
 		provider: RPC.MultiChainProvider,
 		db?: Database
-	)
+	);
 	constructor(
 		param1: Tenderly.Chain | number | Tenderly.ApiKeys,
-		param2: string,
+		param2: string | undefined,
 		provider: RPC.MultiChainProvider,
 		db?: Database
 	) {
