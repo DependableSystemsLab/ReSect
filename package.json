@@ -13,6 +13,7 @@
 		"@dotenvx/dotenvx": "^1.43.0",
 		"@shazow/whatsabi": "^0.21.1",
 		"basic-type-extensions": "^4.4.0",
+		"chalk": "^4.1.2",
 		"date-fns": "^4.1.0",
 		"fetch-throttler": "^1.2.2",
 		"pg": "^8.15.6",

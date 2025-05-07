@@ -1,4 +1,5 @@
 import "basic-type-extensions";
+import chalk from "chalk";
 import { format as formatDate } from "date-fns";
 import { Etherscan, type RPC, type DebugTraceProvider } from "./providers";
 import { CallType, Counter, Hex, extractSelector, type DebugTrace, type MinimalTrace } from "./utils";
@@ -24,9 +25,9 @@ export namespace Reentrancy {
 
 	function addressToString(addr: AddressInfo): string {
 		if (!addr.isContract)
-			return `[EOA] ${addr.address}`;
+			return chalk`{grey [EOA]} {cyanBright ${addr.address}}`;
 		const timestamp = formatDate(addr.creationTimestamp * 1000, "yyyy-MM-dd HH:mm:ss");
-		return `[Contract] ${addr.address} <- ${addr.creator} (${timestamp})`;
+		return chalk`{grey [Contract]} {cyanBright ${addr.address}} <- {blue ${addr.creator}} ({magentaBright ${timestamp}})`;
 	}
 
 	class Traverser<T extends MinimalTrace = MinimalTrace> {
@@ -150,6 +151,14 @@ export namespace Reentrancy {
 
 	export type AnnotatedTrace = DebugTrace<AnnotatedTraceInfo>;
 
+	function traceToString(trace: AnnotatedTraceInfo): string {
+		let str = chalk`{grey [${trace.index}]} {inverse ${trace.type}}: {cyanBright ${trace.from}} -> {cyanBright ${trace.to}}`;
+		const selector = extractSelector(trace);
+		if (selector !== undefined)
+			str += chalk` ({yellowBright ${selector ?? "fallback"}})`;
+		return str;
+	}
+
 	function hasLabel(trace: AnnotatedTrace, label: Label): boolean {
 		if (trace.label === undefined)
 			return false;
@@ -159,16 +168,44 @@ export namespace Reentrancy {
 		trace.label = (trace.label ?? Label.None) | label;
 	}
 
-	export interface AnalysisResult {
-		readonly: boolean;
-		scope: Scope;
-		entryPoint: EntryPoint;
-		attackers: AddressInfo[];
-		victims: AddressInfo[];
-		rootTrace: AnnotatedTrace;
-		reTrace: AnnotatedTrace;
-		reStack: number[];
-		entrances: AnnotatedTraceInfo[];
+	export class AnalysisResult {
+		readonly!: boolean;
+		scope!: Scope;
+		entryPoint!: EntryPoint;
+		attackers!: AddressInfo[];
+		victims!: AddressInfo[];
+		rootTrace!: AnnotatedTrace;
+		reTrace!: AnnotatedTraceInfo;
+		reStack!: number[];
+		entrances!: AnnotatedTraceInfo[];
+
+		constructor(init?: Partial<AnalysisResult>) {
+			Object.assign(this, init);
+		}
+
+		#fieldToString(name: string, value?: any): string {
+			return chalk`${name}: {green ${value}}\n`;
+		}
+
+		toString(): string {
+			let str = "\n";
+			str += this.#fieldToString("Readonly", this.readonly);
+			str += this.#fieldToString("Scope", Scope[this.scope]);
+			str += this.#fieldToString("Entry Point", this.entryPoint);
+			str += this.#fieldToString("Trace Index", this.reTrace.index);
+			str += this.#fieldToString("Trace Stack", this.reStack);
+			str += this.#fieldToString("Attackers", `${chalk.greenBright(this.attackers.length)} addresses`);
+			for (const addr of this.attackers)
+				str += `\t${addressToString(addr)}\n`;
+			str += this.#fieldToString("Victims", `${chalk.greenBright(this.victims.length)} addresses`);
+			for (const addr of this.victims)
+				str += `\t${addressToString(addr)}\n`;
+			str += this.#fieldToString("Entrances", `${chalk.greenBright(this.entrances.length)} entries`);
+			for (const trace of this.entrances)
+				str += `\t${traceToString(trace)}\n`;
+			str += "\n";
+			return str;
+		}
 	}
 
 	export class Analyzer {
@@ -345,7 +382,7 @@ export namespace Reentrancy {
 			const traverser = new Traverser<AnnotatedTraceInfo>(this.#addrInfos);
 			for (const stack of traverser.traverse(callTrace)) {
 				const traces = this.#annotateTrace(callTrace, stack);
-				const result = {
+				const result = new AnalysisResult({
 					reTrace: traces.last(),
 					reStack: stack,
 					rootTrace: callTrace,
@@ -353,7 +390,7 @@ export namespace Reentrancy {
 					victims: Array.from(this.#addrInfos.values())
 						.filter(info => Analyzer.inSameGroup(this.#victimInfo, info)),
 					entrances: traces.filter(t => hasLabel(t, Label.AttackerIn))
-				} as AnalysisResult;
+				}) as AnalysisResult;
 				result.scope = Scope.CrossContract;
 				for (const scope of this.#analyzeScope(traces)) {
 					result.scope = Math.min(result.scope, scope);
@@ -362,23 +399,6 @@ export namespace Reentrancy {
 				}
 				yield result;
 			}
-		}
-
-		static toString(result: AnalysisResult): string {
-			let str = "\n";
-			str += `Readonly: ${result.readonly}\n`;
-			str += `Scope: ${Scope[result.scope]}\n`;
-			str += `Entry Point: ${result.entryPoint}\n`;
-			str += `Trace Index: ${result.reTrace.index}\n`;
-			str += `Trace Stack: ${result.reStack}\n`;
-			str += "Attackers:\n";
-			for (const addr of result.attackers)
-				str += `\t${addressToString(addr)}\n`;
-			str += "Victims:\n";
-			for (const addr of result.victims)
-				str += `\t${addressToString(addr)}\n`;
-			str += "\n";
-			return str;
 		}
 	}
 }

@@ -57,7 +57,7 @@ describe("Reentrancy Analyzer", () => {
 					fail(`Expected no reentrancy, but got ${result.reStack}`);
 				else {
 					console.log(`Analysis result for ${testCase.name}:`);
-					console.log(Reentrancy.Analyzer.toString(result));
+					console.log(result.toString());
 					scope = Math.min(scope, result.scope);
 				}
 			}
