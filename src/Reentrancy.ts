@@ -1,4 +1,5 @@
 import "basic-type-extensions";
+import { format as formatDate } from "date-fns";
 import { Etherscan, type RPC, type DebugTraceProvider } from "./providers";
 import { CallType, Counter, Hex, extractSelector, type DebugTrace, type MinimalTrace } from "./utils";
 
@@ -21,7 +22,14 @@ export namespace Reentrancy {
 
 	type AddressInfo = ContractInfo | EOAInfo;
 
-	class Traverser {
+	function addressToString(addr: AddressInfo): string {
+		if (!addr.isContract)
+			return `[EOA] ${addr.address}`;
+		const timestamp = formatDate(addr.creationTimestamp * 1000, "yyyy-MM-dd HH:mm:ss");
+		return `[Contract] ${addr.address} <- ${addr.creator} (${timestamp})`;
+	}
+
+	class Traverser<T extends MinimalTrace = MinimalTrace> {
 		private readonly beforeCount = new Counter();
 		private readonly afterCount = new Counter();
 		private readonly currentStack: number[] = [];
@@ -29,7 +37,7 @@ export namespace Reentrancy {
 
 		constructor(public readonly infos: Map<string, AddressInfo>) { }
 
-		*#traverse(trace: DebugTrace, senderContractDepth: number): Generator<number[]> {
+		*#traverse(trace: DebugTrace<T>, senderContractDepth: number): Generator<[DebugTrace<T>, number[]]> {
 			const to = this.infos.get(trace.to)!;
 			if (!to.isContract)
 				return;
@@ -42,7 +50,7 @@ export namespace Reentrancy {
 			const reentrancyDetected = senderContractDepth != -1 && this.beforeCount.get(to.creator);
 			if (!(trace.calls?.length)) {
 				if (reentrancyDetected)
-					yield this.currentStack.slice();
+					yield [trace, this.currentStack.slice()];
 				return;
 			}
 
@@ -74,16 +82,16 @@ export namespace Reentrancy {
 			let reentrancyDetectedInCalls = false;
 			for (let i = 0; i < trace.calls.length; i++) {
 				this.currentStack.push(i);
-				for (const stack of this.#traverse(trace.calls[i], newSenderContractDepth)) {
+				for (const result of this.#traverse(trace.calls[i], newSenderContractDepth)) {
 					reentrancyDetectedInCalls = true;
-					yield stack;
+					yield result;
 				}
 				this.currentStack.pop();
 			}
 			after?.();
 
 			if (!reentrancyDetectedInCalls && reentrancyDetected)
-				yield this.currentStack.slice();
+				yield [trace, this.currentStack.slice()];
 		}
 
 		#clear() {
@@ -93,7 +101,7 @@ export namespace Reentrancy {
 			this.sender = undefined!;
 		}
 
-		*traverse(callTrace: DebugTrace): Generator<number[]> {
+		*traverse(callTrace: DebugTrace<T>): Generator<[DebugTrace<T>, number[]]> {
 			this.#clear();
 			this.sender = this.infos.get(callTrace.from)! as EOAInfo;
 			yield* this.#traverse(callTrace, -1);
@@ -135,7 +143,12 @@ export namespace Reentrancy {
 		VictimIn = 1 << 3
 	}
 
-	export type AnnotatedTrace = DebugTrace<MinimalTrace & { label?: Label }>;
+	interface AnnotatedTraceInfo extends MinimalTrace {
+		index: number;
+		label?: Label;
+	}
+
+	export type AnnotatedTrace = DebugTrace<AnnotatedTraceInfo>;
 
 	function hasLabel(trace: AnnotatedTrace, label: Label): boolean {
 		if (trace.label === undefined)
@@ -152,12 +165,14 @@ export namespace Reentrancy {
 		entryPoint: EntryPoint;
 		attackers: AddressInfo[];
 		victims: AddressInfo[];
-		trace: AnnotatedTrace;
-		stack: number[];
+		rootTrace: AnnotatedTrace;
+		reTrace: AnnotatedTrace;
+		reStack: number[];
 	}
 
 	export class Analyzer {
 		readonly #rpcProvider: RPC.MultiChainProvider;
+		readonly #addrInfos = new Map<Hex.Address, AddressInfo>();
 
 		constructor(
 			readonly etherscan: Etherscan,
@@ -182,8 +197,9 @@ export namespace Reentrancy {
 			return set;
 		}
 
-		static toAnnotatedTrace(trace: DebugTrace): AnnotatedTrace {
+		static #toAnnotatedTrace(trace: DebugTrace, ctx: { index: number }): AnnotatedTrace {
 			const result: AnnotatedTrace = {
+				index: ctx.index++,
 				from: trace.from,
 				to: trace.to,
 				type: trace.type,
@@ -191,8 +207,12 @@ export namespace Reentrancy {
 				label: undefined
 			};
 			if (trace.calls?.length)
-				result.calls = trace.calls.map(this.toAnnotatedTrace.bind(this));
+				result.calls = trace.calls.map(c => this.#toAnnotatedTrace(c, ctx));
 			return result;
+		}
+
+		static toAnnotatedTrace(trace: DebugTrace): AnnotatedTrace {
+			return this.#toAnnotatedTrace(trace, { index: 0 });
 		}
 
 		static inSameGroup(addrA: AddressInfo, addrB: AddressInfo): boolean {
@@ -201,10 +221,9 @@ export namespace Reentrancy {
 			return creatorA === creatorB;
 		}
 
-		async getAddressInfos(callTrace: DebugTrace, chain: number): Promise<Map<string, AddressInfo>> {
-			const result = new Map<Hex.Address, AddressInfo>();
+		async getAddressInfos(callTrace: DebugTrace, chain: number): Promise<void> {
 			const addresses = Analyzer.getAllAddresses(callTrace);
-			result.set(callTrace.from, { address: callTrace.from, isContract: false });
+			this.#addrInfos.set(callTrace.from, { address: callTrace.from, isContract: false });
 			addresses.delete(callTrace.from);
 			const contracts = new Array<Hex.Address>();
 			for (const address of addresses) {
@@ -217,18 +236,72 @@ export namespace Reentrancy {
 					info.code = code;
 					contracts.push(address);
 				}
-				result.set(address, info);
+				this.#addrInfos.set(address, info);
 			}
 			const creations = await this.etherscan.getContractCreation(contracts, chain);
 			for (const creation of creations) {
 				if (creation === undefined)
 					continue;
-				const info = result.get(creation.contractAddress)! as ContractInfo;
+				const info = this.#addrInfos.get(creation.contractAddress)! as ContractInfo;
 				info.creationBlock = Number.parseInt(creation.blockNumber);
 				info.creationTxHash = creation.txHash;
 				info.creationTimestamp = Number.parseInt(creation.timestamp);
 				info.creator = creation.contractCreator;
 				info.contractFactory = creation.contractFactory;
+			}
+		}
+
+		#annotateTrace(callTrace: AnnotatedTrace, stack: number[]): AnnotatedTrace[] {
+			const senderInfo = this.#addrInfos.get(callTrace.from)!;
+			const traces = toTraceList(callTrace, stack);
+			const lastTrace = traces.last();
+			lastTrace.label = Label.VictimIn;
+			const victimInfo = this.#addrInfos.get(lastTrace.to)!;
+
+			let searchTargetIsAttacker = true;
+			let lastCurrentPartyTrace = lastTrace;
+			for (let i = traces.length - 2; i >= 0; i--) {
+				const trace = traces[i];
+				const next = traces[i + 1];
+				const to = this.#addrInfos.get(trace.to)! as ContractInfo;
+				if (Analyzer.inSameGroup(to, senderInfo)) {
+					if (searchTargetIsAttacker) {
+						setLabel(next, Label.AttackerOut);
+						setLabel(lastCurrentPartyTrace, Label.VictimIn);
+						searchTargetIsAttacker = false;
+					}
+					lastCurrentPartyTrace = trace;
+				}
+				else if (Analyzer.inSameGroup(to, victimInfo)) {
+					if (!searchTargetIsAttacker) {
+						setLabel(next, Label.VictimOut);
+						setLabel(lastCurrentPartyTrace, Label.AttackerIn);
+						searchTargetIsAttacker = true;
+					}
+					lastCurrentPartyTrace = trace;
+				}
+			}
+			return traces;
+		}
+
+		#analyzeScope(traces: AnnotatedTrace[]): Scope {
+			let result = Scope.CrossContract;
+			let victimOutIdx = -1;
+			for (let i = 0; i < traces.length; i++) {
+				const trace = traces[i];
+				if (victimOutIdx === -1) {
+					if (hasLabel(trace, Label.VictimOut))
+						victimOutIdx = i;
+				}
+				else if (hasLabel(trace, Label.VictimIn)) {
+					const targetTrace = traces[victimOutIdx - 1];
+					const scope = trace.to !== targetTrace.to ? Scope.CrossContract
+						: extractSelector(trace) !== extractSelector(targetTrace)
+							? Scope.CrossFunction
+							: Scope.SingleFunction;
+					result = Math.min(result, scope);
+					victimOutIdx = -1;
+				}
 			}
 			return result;
 		}
@@ -237,72 +310,28 @@ export namespace Reentrancy {
 			const rawTrace = await this.debugProvider.getDebugTrace(Hex.verifyTxHash(txHash), chain);
 			if (rawTrace === null)
 				return;
+			this.#addrInfos.clear();
 			const callTrace = Analyzer.toAnnotatedTrace(rawTrace);
-			const infos = await this.getAddressInfos(callTrace, chain);
+			await this.getAddressInfos(callTrace, chain);
 			const sender = callTrace.from;
-			const senderInfo = infos.get(sender)!;
-			const senderAddresses = Array.from(infos.values())
+			const senderInfo = this.#addrInfos.get(sender)!;
+			const senderAddresses = Array.from(this.#addrInfos.values())
 				.filter(info => Analyzer.inSameGroup(senderInfo, info));
 			if (senderAddresses.length <= 1)
 				return;
-			const traverser = new Traverser(infos);
-			for (const stack of traverser.traverse(callTrace)) {
+			const traverser = new Traverser<AnnotatedTraceInfo>(this.#addrInfos);
+			for (const [trace, stack] of traverser.traverse(callTrace)) {
 				const result = {
-					stack,
-					trace: callTrace,
+					reTrace: trace,
+					reStack: stack,
+					rootTrace: callTrace,
 					attackers: senderAddresses
 				} as AnalysisResult;
-
-				const traces = toTraceList(callTrace, stack);
-				const lastTrace = traces.last();
-				lastTrace.label = Label.VictimIn;
-				const victimInfo = infos.get(lastTrace.to)!;
-				result.victims = Array.from(infos.values())
+				const traces = this.#annotateTrace(callTrace, stack);
+				const victimInfo = this.#addrInfos.get(traces.last().to)!;
+				result.victims = Array.from(this.#addrInfos.values())
 					.filter(info => Analyzer.inSameGroup(victimInfo, info));
-
-				let searchTargetIsAttacker = true;
-				let lastCurrentPartyTrace = lastTrace;
-				for (let i = traces.length - 2; i >= 0; i--) {
-					const trace = traces[i];
-					const next = traces[i + 1];
-					const to = infos.get(trace.to)! as ContractInfo;
-					if (Analyzer.inSameGroup(to, senderInfo)) {
-						if (searchTargetIsAttacker) {
-							setLabel(next, Label.AttackerOut);
-							setLabel(lastCurrentPartyTrace, Label.VictimIn);
-							searchTargetIsAttacker = false;
-						}
-						lastCurrentPartyTrace = trace;
-					}
-					else if (Analyzer.inSameGroup(to, victimInfo)) {
-						if (!searchTargetIsAttacker) {
-							setLabel(next, Label.VictimOut);
-							setLabel(lastCurrentPartyTrace, Label.AttackerIn);
-							searchTargetIsAttacker = true;
-						}
-						lastCurrentPartyTrace = trace;
-					}
-				}
-
-				result.scope = Scope.CrossContract;
-				let victimOutIdx = -1;
-				for (let i = 0; i < traces.length; i++) {
-					const trace = traces[i];
-					if (victimOutIdx === -1) {
-						if (hasLabel(trace, Label.VictimOut))
-							victimOutIdx = i;
-					}
-					else if (hasLabel(trace, Label.VictimIn)) {
-						const targetTrace = traces[victimOutIdx - 1];
-						const scope = trace.to !== targetTrace.to ? Scope.CrossContract
-							: extractSelector(trace) !== extractSelector(targetTrace)
-								? Scope.CrossFunction
-								: Scope.SingleFunction;
-						if (scope < result.scope)
-							result.scope = scope;
-						victimOutIdx = -1;
-					}
-				}
+				result.scope = this.#analyzeScope(traces);
 
 				yield result;
 			}
@@ -311,15 +340,16 @@ export namespace Reentrancy {
 		static toString(result: AnalysisResult): string {
 			let str = "\n";
 			str += `Readonly: ${result.readonly}\n`;
-			str += `Scope: ${result.scope}\n`;
+			str += `Scope: ${Scope[result.scope]}\n`;
 			str += `Entry Point: ${result.entryPoint}\n`;
-			str += `Stack: ${result.stack}\n`;
+			str += `Trace Index: ${result.reTrace.index}\n`;
+			str += `Trace Stack: ${result.reStack}\n`;
 			str += "Attackers:\n";
 			for (const addr of result.attackers)
-				str += `\t[${addr.isContract ? "Contract" : "EOA"}] ${addr.address}\n`;
+				str += `\t${addressToString(addr)}\n`;
 			str += "Victims:\n";
 			for (const addr of result.victims)
-				str += `\t[${addr.isContract ? "Contract" : "EOA"}] ${addr.address}\n`;
+				str += `\t${addressToString(addr)}\n`;
 			str += "\n";
 			return str;
 		}
