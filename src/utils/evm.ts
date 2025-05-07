@@ -53,11 +53,19 @@ export function verifyCallTypes<T extends TypeUnverifiedDebugTrace>(debugTrace: 
 	return debugTrace as TypeVerifiedDebugTrace<T>;
 }
 
-export function extractSelector(trace: { type: CallType, input: Hex }): string | undefined {
-	const input = Hex.removePrefix(Hex.toString(trace.input));
-	if (input === "" || !trace.type.startsWith("CALL") && trace.type !== CallType.CALLCODE)
+/**
+ * Extracts the selector from a trace input.
+ * @returns A 4-byte hex string representing the selector,
+ * or `null` if the input is empty,
+ * or `undefined` if the trace type is not a call type.
+ */
+export function extractSelector(trace: { type: CallType, input: Hex }): Hex.Selector | null | undefined {
+	if (!trace.type.includes("CALL")) // CALL, STATICCALL, DELEGATECALL, CALLCODE
 		return undefined;
+	const input = Hex.removePrefix(Hex.toString(trace.input));
+	if (input === "") // Fallback
+		return null;
 	if (input.length < 8)
 		throw new TypeError(`Invalid input: ${input}`);
-	return `0x${input.slice(0, 8)}`;
+	return `0x${input.slice(0, 8)}` as Hex.Selector;
 }

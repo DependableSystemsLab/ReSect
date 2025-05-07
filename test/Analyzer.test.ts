@@ -50,17 +50,20 @@ describe("Reentrancy Analyzer", () => {
 				? new Reentrancy.Analyzer(etherscan, debugProvider)
 				: new Reentrancy.Analyzer(etherscanWithDb, debugProviderWithDb);
 			let detected = false;
+			let scope = Reentrancy.Scope.CrossContract;
 			for await (const result of analyzer.analyze(txHash, chainId)) {
 				detected = true;
 				if (!testCase.isReentrancy)
-					fail(`Expected no reentrancy, but got ${result.stack}`);
+					fail(`Expected no reentrancy, but got ${result.reStack}`);
 				else {
-					if (testCase.scope)
-						expect(result.scope).toBe(testCase.scope);
+					console.log(`Analysis result for ${testCase.name}:`);
 					console.log(Reentrancy.Analyzer.toString(result));
+					scope = Math.min(scope, result.scope);
 				}
 			}
 			expect(detected).toBe(testCase.isReentrancy);
+			if (testCase.isReentrancy && testCase.scope !== undefined)
+				expect(scope).toBe(testCase.scope);
 		}, timeout);
 	}
 });
