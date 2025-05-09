@@ -1,6 +1,6 @@
-import { Promisable } from "type-fest";
+import { Promisable, type Arrayable } from "type-fest";
 import { DataSource, In, IsNull, Not, type DataSourceOptions, type EntityTarget, type ObjectLiteral } from "typeorm";
-import { Block, CallTrace, Contract, Transaction } from "./entities";
+import { Block, CallTrace, Chain, Contract, Transaction } from "./entities";
 import { typeormConfig } from "../config/typeorm";
 import { EtherscanConverter, JsonRpcConverter, TraceConverter } from "../converters";
 import type { Etherscan, RPC } from "../providers";
@@ -45,6 +45,12 @@ export class Database {
 				result[cName] = id[pName];
 		}
 		return result;
+	}
+
+	async close() {
+		const source = await this.#source;
+		if (source.isInitialized)
+			await source.destroy();
 	}
 
 	async has(entity: EntityTarget<Block>, id: Pick<Block, "chainId" | "number">): Promise<boolean>;
@@ -149,6 +155,39 @@ export class Database {
 		const repo = await this.getRepository(Transaction);
 		const entities = transactions.map(t => JsonRpcConverter.transactionToEntity(t, chainId));
 		return await repo.save(entities);
+	}
+
+	async getAttackTransactions(
+		attackIds?: Arrayable<number>,
+		actions?: Arrayable<Transaction.Action>
+	): Promise<Transaction.WithAttack[]> {
+		if (typeof attackIds === "number")
+			attackIds = [attackIds];
+		if (typeof actions === "string")
+			actions = [actions];
+		const manager = (await this.#source).manager;
+		let txns = await manager.find(Transaction, {
+			where: {
+				attackId: attackIds?.length ? In(attackIds) : Not(IsNull()),
+			},
+			relations: {
+				block: true,
+				attack: true
+			}
+		});
+		if (actions?.length) {
+			const actionSet = new Set(actions);
+			txns = txns.filter(tx => tx.actions?.some(a => actionSet.has(a)));
+		}
+
+		const chainIds = new Set(txns.map(tx => tx.chainId));
+		const chains = await manager.find(Chain, {
+			where: { id: In(Array.from(chainIds)) }
+		});
+		const chainMap = new Map(chains.map(c => [c.id, c]));
+		txns.forEach(tx => tx.chain = chainMap.get(tx.chainId!));
+
+		return txns as Transaction.WithAttack[];
 	}
 
 	async getDebugTrace(txHash: Hex.String): Promise<RPC.Debug.Trace | null> {

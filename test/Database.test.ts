@@ -1,5 +1,9 @@
 import "basic-type-extensions";
+import { instanceToPlain } from "class-transformer";
 import { DataSource, IsNull } from "typeorm";
+import inspector from "node:inspector";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { etherscanApiKey } from "../src/config/credentials";
 import { typeormConfig } from "../src/config/typeorm";
 import { JsonRpcConverter } from "../src/converters";
@@ -8,10 +12,14 @@ import { Etherscan } from "../src/providers";
 import { Hex } from "../src/utils";
 
 describe("Database", () => {
+	const debug = inspector.url() !== undefined;
+	const timeout = debug ? 24 * 60 * 60_000 : 30_000;
+	jest.setTimeout(timeout);
+
 	test("Schema", async () => {
 		const source = new DataSource({
 			...typeormConfig,
-			database: "reentrancy-attack-test",
+			schema: "test",
 			synchronize: false,
 			logging: true
 		});
@@ -78,4 +86,13 @@ describe("Database", () => {
 		await blockRepo.save(blocks.filter(b => b != null));
 		await repo.save(txs);
 	}, 1000 * 60 * 60 * 24);
+
+	test("Dump Exploit Transactions", async () => {
+		const database = Database.default;
+		const dataFile = join(__dirname, "..", "data", "exploit-transactions.json");
+		const txns = await database.getAttackTransactions(undefined, Transaction.Action.Exploit);
+		const json = JSON.stringify(instanceToPlain(txns), null, "\t");
+		await writeFile(dataFile, json);
+		await database.close();
+	});
 });

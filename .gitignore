@@ -1,6 +1,7 @@
 .turbo
 node_modules
 coverage
+data
 dist
 example
 
