@@ -1,3 +1,4 @@
+import type { SetFieldType } from "type-fest";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 import { Hex } from "../../utils";
 import { Chain } from "./Chain";
@@ -5,6 +6,7 @@ import { Contract } from "./Contract";
 import { Block } from "./Block";
 import { CallTrace } from "./CallTrace";
 import { ReentrancyAttack } from "./ReentrancyAttack";
+import type { EntityOnlyRelations, EntityWithRelations, FullEntity, RelationKeys } from "./types";
 
 
 enum TransactionAction {
@@ -99,4 +101,12 @@ export class Transaction {
 export namespace Transaction {
 	export const Action = TransactionAction;
 	export type Action = TransactionAction;
+
+	export const relations = Object.freeze(["chain", "block", "attack", "traces", "createdContracts"]) satisfies RelationKeys<Transaction>;
+	export type Relations = typeof relations[number];
+	export type Full = FullEntity<Transaction, Relations>;
+	export type WithRelations<T extends Transaction.Relations, U extends Transaction = Transaction> = EntityWithRelations<Transaction, T, U>;
+	export type OnlyRelations<T extends Transaction.Relations, U extends Transaction = Transaction> = EntityOnlyRelations<Transaction, Relations, T, U>;
+
+	export type WithAttack = OnlyRelations<"block" | "chain" | "attack", SetFieldType<Full, "attack", ReentrancyAttack>>;
 }
