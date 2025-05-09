@@ -17,6 +17,8 @@ interface TestCaseBase {
 interface PositiveTestCase extends TestCaseBase {
 	isReentrancy: true;
 	scope?: Reentrancy.Scope;
+	entranceType?: Reentrancy.EntranceType;
+	readonly?: boolean;
 }
 
 interface NegativeTestCase extends TestCaseBase {
@@ -41,29 +43,42 @@ describe("Reentrancy Analyzer", () => {
 		? new QuickNodeWithDb(quickNodeApiKey, "Ethereum")
 		: new TenderlyWithDb(tenderlyNodeAccessKeys, "Ethereum", etherscanWithDb.geth);
 
-	for (const testCase of cases) {
-		const it = testCase.skip ? test.skip : test;
-		it(`${testCase.name} on ${testCase.chain}`, async () => {
-			const { chain, txHash } = testCase;
-			const chainId = Chain[chain];
-			const analyzer = testCase.useDatabase === false
-				? new Reentrancy.Analyzer(etherscan, debugProvider)
-				: new Reentrancy.Analyzer(etherscanWithDb, debugProviderWithDb);
-			let detected = false;
-			let scope = Reentrancy.Scope.CrossContract;
-			for await (const result of analyzer.analyze(txHash, chainId)) {
-				detected = true;
-				if (!testCase.isReentrancy)
-					fail(`Expected no reentrancy, but got ${result.reStack}`);
-				else {
-					console.log(`Analysis result for ${testCase.name}:`);
-					console.log(result.toString());
-					scope = Math.min(scope, result.scope);
-				}
+	async function testOnCase(testCase: Readonly<TestCase>) {
+		const { chain, txHash } = testCase;
+		const chainId = Chain[chain];
+		const analyzer = testCase.useDatabase === false
+			? new Reentrancy.Analyzer(etherscan, debugProvider)
+			: new Reentrancy.Analyzer(etherscanWithDb, debugProviderWithDb);
+		let detected = false;
+		let scope = Reentrancy.Scope.CrossContract;
+		let readonly = false;
+		const entranceTypes = new Set<Reentrancy.EntranceType>();
+		for await (const result of analyzer.analyze(txHash, chainId)) {
+			detected = true;
+			if (!testCase.isReentrancy)
+				fail(`Expected no reentrancy, but got ${result.reStack}`);
+			else {
+				console.log(`Analysis result for ${testCase.name}:`);
+				console.log(result.toString());
+				scope = Math.min(scope, result.scope);
+				if (result.readonly === true)
+					readonly = true;
+				result.entrances.forEach(e => entranceTypes.add(e.type));
 			}
-			expect(detected).toBe(testCase.isReentrancy);
-			if (testCase.isReentrancy && testCase.scope !== undefined)
+		}
+		expect(detected).toBe(testCase.isReentrancy);
+		if (testCase.isReentrancy) {
+			if (testCase.scope !== undefined)
 				expect(scope).toBe(testCase.scope);
-		}, timeout);
+			if (testCase.readonly !== undefined)
+				expect(readonly).toBe(testCase.readonly);
+			if (testCase.entranceType !== undefined)
+				expect(Array.from(entranceTypes)).toContain(testCase.entranceType);
+		}
 	}
+
+	cases.forEach(testCase => {
+		const it = testCase.skip ? test.skip : test;
+		it(testCase.name, () => testOnCase(testCase), timeout);
+	});
 });
