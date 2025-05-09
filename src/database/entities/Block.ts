@@ -1,5 +1,6 @@
+import { Transform, Type } from "class-transformer";
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
-import type { Hex } from "../../utils";
+import { Transformer, type Hex } from "../../utils";
 import { Chain } from "./Chain";
 
 
@@ -21,12 +22,15 @@ export class Block {
 	@Column("timestamp")
 	timestamp?: Date;
 
+	@Transform(Transformer.bigint.fn)
 	@Column("bigint", { name: "gas_limit" })
 	gasLimit?: bigint;
 
+	@Transform(Transformer.bigint.fn)
 	@Column("bigint", { name: "gas_used" })
 	gasUsed?: bigint;
 
+	@Transform(Transformer.bigint.nullable.fn)
 	@Column("bigint", { name: "base_fee_per_gas", nullable: true })
 	baseFeePerGas?: bigint | null;
 
@@ -36,6 +40,7 @@ export class Block {
 	@Column("integer")
 	size?: number;
 
+	@Type(() => Chain)
 	@ManyToOne(
 		() => Chain,
 		{ persistence: false }

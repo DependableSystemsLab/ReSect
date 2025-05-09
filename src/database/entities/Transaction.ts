@@ -1,3 +1,4 @@
+import { Exclude, Type } from "class-transformer";
 import type { SetFieldType } from "type-fest";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 import { Hex } from "../../utils";
@@ -47,6 +48,7 @@ export class Transaction {
 	})
 	actions?: Transaction.Action[] | null;
 
+	@Type(() => Chain)
 	@ManyToOne(
 		() => Chain,
 		{ persistence: false }
@@ -54,6 +56,7 @@ export class Transaction {
 	@JoinColumn({ name: "chain" })
 	chain?: Chain;
 
+	@Type(() => Block)
 	@ManyToOne(
 		() => Block,
 		{ persistence: false }
@@ -64,6 +67,7 @@ export class Transaction {
 	])
 	block?: Block | null;
 
+	@Type(() => ReentrancyAttack)
 	@ManyToOne(
 		() => ReentrancyAttack,
 		ra => ra.transactions,
@@ -72,6 +76,7 @@ export class Transaction {
 	@JoinColumn({ name: "associated_attack" })
 	attack?: ReentrancyAttack | null;
 
+	@Exclude()
 	@OneToMany(
 		() => CallTrace,
 		trace => trace.transaction,
@@ -79,6 +84,7 @@ export class Transaction {
 	)
 	traces?: CallTrace[];
 
+	@Exclude()
 	@OneToMany(
 		() => Contract,
 		a => a.creationTransaction,
