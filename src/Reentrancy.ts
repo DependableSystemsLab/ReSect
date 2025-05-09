@@ -3,6 +3,8 @@ import chalk from "chalk";
 import { format as formatDate } from "date-fns";
 import { Etherscan, type RPC, type DebugTraceProvider } from "./providers";
 import { CallType, Counter, Hex, extractSelector, type DebugTrace, type MinimalTrace } from "./utils";
+import { abiFromBytecode, type abi } from "@shazow/whatsabi";
+import { ERC1155, ERC1363, ERC20, ERC721, ERC777 } from "./config/ERC";
 
 export namespace Reentrancy {
 	interface ContractInfo {
@@ -14,6 +16,7 @@ export namespace Reentrancy {
 		creationTimestamp: number;
 		creator: string;
 		contractFactory?: string;
+		abi: abi.ABI;
 	}
 
 	interface EOAInfo {
@@ -129,7 +132,7 @@ export namespace Reentrancy {
 		CrossContract
 	}
 
-	export enum EntryPoint {
+	export enum EntranceType {
 		Fallback,
 		MaliciousToken,
 		ERCHook,
@@ -146,13 +149,19 @@ export namespace Reentrancy {
 
 	interface AnnotatedTraceInfo extends MinimalTrace {
 		index: number;
+		selector?: Hex.Selector | null;
 		label?: Label;
 	}
 
 	export type AnnotatedTrace = DebugTrace<AnnotatedTraceInfo>;
 
-	function traceToString(trace: AnnotatedTraceInfo): string {
-		let str = chalk`{grey [${trace.index}]} {inverse ${trace.type}}: {cyanBright ${trace.from}} -> {cyanBright ${trace.to}}`;
+	export interface Entrance {
+		type: EntranceType;
+		trace: AnnotatedTraceInfo;
+	}
+
+	function entranceToString({ type, trace }: Entrance): string {
+		let str = chalk`{red [${EntranceType[type]}]} {inverse ${trace.type}}: {cyanBright ${trace.from}} -> {cyanBright ${trace.to}}`;
 		const selector = extractSelector(trace);
 		if (selector !== undefined)
 			str += chalk` ({yellowBright ${selector ?? "fallback"}})`;
@@ -171,13 +180,12 @@ export namespace Reentrancy {
 	export class AnalysisResult {
 		readonly!: boolean;
 		scope!: Scope;
-		entryPoint!: EntryPoint;
 		attackers!: AddressInfo[];
 		victims!: AddressInfo[];
 		rootTrace!: AnnotatedTrace;
 		reTrace!: AnnotatedTraceInfo;
 		reStack!: number[];
-		entrances!: AnnotatedTraceInfo[];
+		entrances!: Entrance[];
 
 		constructor(init?: Partial<AnalysisResult>) {
 			Object.assign(this, init);
@@ -191,7 +199,6 @@ export namespace Reentrancy {
 			let str = "\n";
 			str += this.#fieldToString("Readonly", this.readonly);
 			str += this.#fieldToString("Scope", Scope[this.scope]);
-			str += this.#fieldToString("Entry Point", this.entryPoint);
 			str += this.#fieldToString("Trace Index", this.reTrace.index);
 			str += this.#fieldToString("Trace Stack", this.reStack);
 			str += this.#fieldToString("Attackers", `${chalk.greenBright(this.attackers.length)} addresses`);
@@ -201,12 +208,20 @@ export namespace Reentrancy {
 			for (const addr of this.victims)
 				str += `\t${addressToString(addr)}\n`;
 			str += this.#fieldToString("Entrances", `${chalk.greenBright(this.entrances.length)} entries`);
-			for (const trace of this.entrances)
-				str += `\t${traceToString(trace)}\n`;
+			for (const entrance of this.entrances)
+				str += `\t${entranceToString(entrance)}\n`;
 			str += "\n";
 			return str;
 		}
 	}
+
+	const hookRecipientSelectors = [
+		ERC721.Recipient.abis.onERC721Received.selector,
+		ERC777.Recipient.abis.tokensReceived.selector,
+		ERC1155.Recipient.abis.onERC1155Received.selector,
+		ERC1155.Recipient.abis.onERC1155BatchReceived.selector,
+		ERC1363.Recipient.abis.onTransferReceived.selector
+	];
 
 	export class Analyzer {
 		readonly #rpcProvider: RPC.MultiChainProvider;
@@ -244,7 +259,8 @@ export namespace Reentrancy {
 				to: trace.to,
 				type: trace.type,
 				input: trace.input,
-				label: undefined
+				label: undefined,
+				selector: extractSelector(trace)
 			};
 			if (trace.calls?.length)
 				result.calls = trace.calls.map(c => this.#toAnnotatedTrace(c, ctx));
@@ -278,6 +294,7 @@ export namespace Reentrancy {
 				} as AddressInfo;
 				if (info.isContract) {
 					info.code = code;
+					info.abi = abiFromBytecode(code);
 					contracts.push(address);
 				}
 				this.#addrInfos.set(address, info);
@@ -325,18 +342,21 @@ export namespace Reentrancy {
 			return traces;
 		}
 
-		// TODO: use ABI to deterministically decide whether a call goes to the fallback function
-		*#analyzeScope(traces: AnnotatedTrace[]): Generator<Scope> {
+		*#analyzeScope(traces: readonly AnnotatedTrace[]): Generator<Scope> {
 			const victimGroups = new Array<Map<Hex.Address, Set<Hex.Selector | null>>>();
 			let inGroup = false;
 			for (const trace of traces) {
-				const selector = extractSelector(trace);
-				if (selector === undefined)
+				if (trace.selector === undefined)
 					continue;
+				/*if (trace.selector !== null) {
+					const functions = (this.#addrInfos.get(trace.to)! as ContractInfo).abi;
+					if (!functions.find(f => f.type === "function" && f.selector === trace.selector))
+						trace.selector = null;
+				}*/
 				if (hasLabel(trace, Label.VictimIn)) {
 					inGroup = true;
 					const map = new Map<Hex.Address, Set<Hex.Selector | null>>();
-					map.set(trace.to, new Set([selector]));
+					map.set(trace.to, new Set([trace.selector]));
 					victimGroups.push(map);
 				}
 				else if (hasLabel(trace, Label.VictimOut))
@@ -344,9 +364,9 @@ export namespace Reentrancy {
 				else if (inGroup && Analyzer.inSameGroup(this.#victimInfo, this.#addrInfos.get(trace.to)!)) {
 					const map = victimGroups.last()!;
 					if (!map.has(trace.to))
-						map.set(trace.to, new Set([selector]));
+						map.set(trace.to, new Set([trace.selector]));
 					else
-						map.get(trace.to)!.add(selector);
+						map.get(trace.to)!.add(trace.selector);
 				}
 			}
 			let prevGroup = victimGroups[0];
@@ -368,6 +388,25 @@ export namespace Reentrancy {
 			}
 		}
 
+		*#analyzeEntrances(traces: readonly AnnotatedTrace[]): Generator<Entrance> {
+			for (const trace of traces) {
+				if (!hasLabel(trace, Label.AttackerIn))
+					continue;
+				if (trace.selector === null) {
+					yield { type: EntranceType.Fallback, trace };
+					continue;
+				}
+				const to = this.#addrInfos.get(trace.to)! as ContractInfo;
+				const type = ERC20.check(to.abi)
+					? EntranceType.MaliciousToken
+					// TODO: Could reentrancy possibly be initiated with CREATE?
+					: hookRecipientSelectors.includes(trace.selector!)
+						? EntranceType.ERCHook
+						: EntranceType.Other;
+				yield { type, trace };
+			}
+		}
+
 		async *analyze(txHash: Hex.String, chain: number): AsyncGenerator<AnalysisResult> {
 			const rawTrace = await this.debugProvider.getDebugTrace(Hex.verifyTxHash(txHash), chain);
 			if (rawTrace === null)
@@ -383,20 +422,22 @@ export namespace Reentrancy {
 			for (const stack of traverser.traverse(callTrace)) {
 				const traces = this.#annotateTrace(callTrace, stack);
 				const result = new AnalysisResult({
+					scope: Scope.CrossContract,
 					reTrace: traces.last(),
 					reStack: stack,
 					rootTrace: callTrace,
 					attackers: senderAddresses,
 					victims: Array.from(this.#addrInfos.values())
-						.filter(info => Analyzer.inSameGroup(this.#victimInfo, info)),
-					entrances: traces.filter(t => hasLabel(t, Label.AttackerIn))
+						.filter(info => Analyzer.inSameGroup(this.#victimInfo, info))
 				}) as AnalysisResult;
-				result.scope = Scope.CrossContract;
+				const lastVictimIn = traces.findLast(t => hasLabel(t, Label.VictimIn))!;
+				result.readonly = lastVictimIn.type === CallType.STATICCALL;
 				for (const scope of this.#analyzeScope(traces)) {
 					result.scope = Math.min(result.scope, scope);
 					if (scope === Scope.SingleFunction)
 						break;
 				}
+				result.entrances = Array.from(this.#analyzeEntrances(traces));
 				yield result;
 			}
 		}

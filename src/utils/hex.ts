@@ -125,6 +125,13 @@ export namespace Hex {
 			throw new Error(`Invalid txhash: ${hash}`);
 		return hash as TxHash;
 	}
+
+	const selectorPattern = getPattern(8);
+	export function verifySelector(selector: String): Selector {
+		if (!selectorPattern.test(selector))
+			throw new Error(`Invalid selector: ${selector}`);
+		return selector as Selector;
+	}
 }
 
 export type Hex = Hex.Number | Hex.String | Buffer;

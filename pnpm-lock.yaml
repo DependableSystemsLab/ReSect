@@ -26,6 +26,9 @@ importers:
       fetch-throttler:
         specifier: ^1.2.2
         version: 1.2.2
+      js-sha3:
+        specifier: ^0.9.3
+        version: 0.9.3
       pg:
         specifier: ^8.15.6
         version: 8.15.6
@@ -1047,6 +1050,9 @@ packages:
     peerDependenciesMeta:
       node-notifier:
         optional: true
+
+  js-sha3@0.9.3:
+    resolution: {integrity: sha512-BcJPCQeLg6WjEx3FE591wVAevlli8lxsxm9/FzV4HXkV49TmBH38Yvrpce6fjbADGMKFrBMGTqrVz3qPIZ88Gg==}
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
@@ -2927,6 +2933,8 @@ snapshots:
       - babel-plugin-macros
       - supports-color
       - ts-node
+
+  js-sha3@0.9.3: {}
 
   js-tokens@4.0.0: {}
 
