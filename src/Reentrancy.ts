@@ -8,19 +8,19 @@ import { ERC1155, ERC1363, ERC20, ERC721, ERC777 } from "./config/ERC";
 
 export namespace Reentrancy {
 	interface ContractInfo {
-		address: string;
+		address: Hex.Address;
 		isContract: true;
-		code: string;
+		code: Hex.String;
 		creationBlock: number;
-		creationTxHash: string;
+		creationTxHash: Hex.TxHash;
 		creationTimestamp: number;
-		creator: string;
-		contractFactory?: string;
+		creator: Hex.Address;
+		contractFactory?: Hex.Address;
 		abi: abi.ABI;
 	}
 
 	interface EOAInfo {
-		address: string;
+		address: Hex.Address;
 		isContract: false;
 	}
 
@@ -33,9 +33,15 @@ export namespace Reentrancy {
 		return chalk`{grey [Contract]} {cyanBright ${addr.address}} <- {blue ${addr.creator}} ({magentaBright ${timestamp}})`;
 	}
 
+	function inSameGroup(addrA: AddressInfo, addrB: AddressInfo): boolean {
+		const creatorA = addrA.isContract ? addrA.creator : addrA.address;
+		const creatorB = addrB.isContract ? addrB.creator : addrB.address;
+		return creatorA === creatorB;
+	}
+
 	class Traverser<T extends MinimalTrace = MinimalTrace> {
-		private readonly beforeCount = new Counter();
-		private readonly afterCount = new Counter();
+		private readonly beforeCount = new Counter<AddressInfo>();
+		private readonly afterCount = new Counter<AddressInfo>();
 		private readonly currentStack: number[] = [];
 		private sender!: EOAInfo;
 
@@ -46,12 +52,13 @@ export namespace Reentrancy {
 			if (!to.isContract)
 				return;
 			const from = this.infos.get(trace.from)!;
-			const fromIsSender = Analyzer.inSameGroup(from, this.sender);
+			const fromIsSender = inSameGroup(from, this.sender);
 			// STATICCALL from sender-controlled contract is always benign
 			if (fromIsSender && trace.type === CallType.STATICCALL)
 				return;
 
-			const reentrancyDetected = senderContractDepth != -1 && this.beforeCount.get(to.creator);
+			const reentrancyDetected = senderContractDepth !== -1
+				&& this.beforeCount.enumerate().some(([addr, count]) => count > 0 && inSameGroup(addr, to));
 			if (!(trace.calls?.length)) {
 				if (reentrancyDetected)
 					yield this.currentStack.slice();
@@ -59,16 +66,16 @@ export namespace Reentrancy {
 			}
 
 			// Found sender contract
-			const toIsSender = Analyzer.inSameGroup(to, this.sender);
+			const toIsSender = inSameGroup(to, this.sender);
 			const found = !fromIsSender && toIsSender;
 			const newSenderContractDepth = found ? this.currentStack.length : senderContractDepth;
 
 			let before: (() => void) | undefined;
 			let after: (() => void) | undefined;
 			if (!toIsSender) {
-				const counter = senderContractDepth != -1 ? this.afterCount : this.beforeCount;
-				before = () => counter.increment(to.creator);
-				after = () => counter.decrement(to.creator);
+				const counter = senderContractDepth !== -1 ? this.afterCount : this.beforeCount;
+				before = () => counter.increment(to);
+				after = () => counter.decrement(to);
 			}
 			else if (found && senderContractDepth !== -1) {
 				const clone = this.afterCount.clone();
@@ -271,12 +278,6 @@ export namespace Reentrancy {
 			return this.#toAnnotatedTrace(trace, { index: 0 });
 		}
 
-		static inSameGroup(addrA: AddressInfo, addrB: AddressInfo): boolean {
-			const creatorA = addrA.isContract ? addrA.creator : addrA.address;
-			const creatorB = addrB.isContract ? addrB.creator : addrB.address;
-			return creatorA === creatorB;
-		}
-
 		/**
 		 * Get all addresses in the call trace and fetch their code from the blockchain.
 		 */
@@ -308,7 +309,7 @@ export namespace Reentrancy {
 				info.creationTxHash = creation.txHash;
 				info.creationTimestamp = Number.parseInt(creation.timestamp);
 				info.creator = creation.contractCreator;
-				info.contractFactory = creation.contractFactory;
+				info.contractFactory = String.isNullOrEmpty(creation.contractFactory) ? undefined : creation.contractFactory;
 			}
 		}
 
@@ -322,7 +323,7 @@ export namespace Reentrancy {
 				const trace = traces[i];
 				const next = traces[i + 1];
 				const to = this.#addrInfos.get(trace.to)! as ContractInfo;
-				if (Analyzer.inSameGroup(to, this.#senderInfo)) {
+				if (inSameGroup(to, this.#senderInfo)) {
 					if (searchTargetIsAttacker) {
 						setLabel(next, Label.AttackerOut);
 						setLabel(lastCurrentPartyTrace, Label.VictimIn);
@@ -330,7 +331,7 @@ export namespace Reentrancy {
 					}
 					lastCurrentPartyTrace = trace;
 				}
-				else if (Analyzer.inSameGroup(to, this.#victimInfo)) {
+				else if (inSameGroup(to, this.#victimInfo)) {
 					if (!searchTargetIsAttacker) {
 						setLabel(next, Label.VictimOut);
 						setLabel(lastCurrentPartyTrace, Label.AttackerIn);
@@ -361,7 +362,7 @@ export namespace Reentrancy {
 				}
 				else if (hasLabel(trace, Label.VictimOut))
 					inGroup = false;
-				else if (inGroup && Analyzer.inSameGroup(this.#victimInfo, this.#addrInfos.get(trace.to)!)) {
+				else if (inGroup && inSameGroup(this.#victimInfo, this.#addrInfos.get(trace.to)!)) {
 					const map = victimGroups.last()!;
 					if (!map.has(trace.to))
 						map.set(trace.to, new Set([trace.selector]));
@@ -415,7 +416,7 @@ export namespace Reentrancy {
 			const callTrace = Analyzer.toAnnotatedTrace(rawTrace);
 			await this.#fetchAddressInfos(callTrace, chain);
 			const senderAddresses = Array.from(this.#addrInfos.values())
-				.filter(info => Analyzer.inSameGroup(this.#senderInfo, info));
+				.filter(info => inSameGroup(this.#senderInfo, info));
 			if (senderAddresses.length <= 1)
 				return;
 			const traverser = new Traverser<AnnotatedTraceInfo>(this.#addrInfos);
@@ -428,7 +429,7 @@ export namespace Reentrancy {
 					rootTrace: callTrace,
 					attackers: senderAddresses,
 					victims: Array.from(this.#addrInfos.values())
-						.filter(info => Analyzer.inSameGroup(this.#victimInfo, info))
+						.filter(info => inSameGroup(this.#victimInfo, info))
 				}) as AnalysisResult;
 				const lastVictimIn = traces.findLast(t => hasLabel(t, Label.VictimIn))!;
 				result.readonly = lastVictimIn.type === CallType.STATICCALL;
