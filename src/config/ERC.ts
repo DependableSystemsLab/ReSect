@@ -1,6 +1,6 @@
 import type { abi } from "@shazow/whatsabi";
 import { keccak256 } from "js-sha3";
-import { Hex } from "../utils";
+import { extractSelector, Hex, type MinimalTrace } from "../utils";
 import type { SetRequired } from "type-fest";
 
 
@@ -32,13 +32,14 @@ function constructAbi<T extends string = string>(
 	return Object.freeze(abi);
 }
 
-function checkAbi<T extends string = string>(
+export function checkAbi<T extends string = string>(
 	abi: abi.ABI,
 	target: NamedABI<T>,
 	funcNames?: T[]
 ): boolean {
 	const funcs = abi.filter(i => i.type === "function");
-	if (funcs.length < Object.keys(target).length) return false;
+	if (funcs.length < Object.keys(target).length)
+		return false;
 	const selectors = new Set(funcs.map(f => f.selector));
 	funcNames ??= Object.keys(target) as T[];
 	for (const name of funcNames) {
@@ -47,6 +48,20 @@ function checkAbi<T extends string = string>(
 			return false;
 	}
 	return true;
+}
+
+export function checkTrace<T extends string = string>(
+	trace: MinimalTrace,
+	target: NamedABI<T>
+): boolean {
+	const selector = extractSelector(trace);
+	if (selector == null)
+		return false; // Fallback or not a call type
+	for (const name in target) {
+		if (target[name].selector === selector)
+			return true;
+	}
+	return false;
 }
 
 export namespace ERC20 {
@@ -119,8 +134,6 @@ export namespace ERC20 {
 	]);
 
 	export type FuncName = keyof typeof abis;
-
-	export const check = (abi: abi.ABI, funcNames?: FuncName[]): boolean => checkAbi(abi, abis, funcNames);
 }
 
 export namespace ERC721.Recipient {
@@ -141,8 +154,6 @@ export namespace ERC721.Recipient {
 	]);
 
 	export type FuncName = keyof typeof abis;
-
-	export const check = (abi: abi.ABI, funcNames?: FuncName[]): boolean => checkAbi(abi, abis, funcNames);
 }
 
 export namespace ERC777.Recipient {
@@ -163,8 +174,6 @@ export namespace ERC777.Recipient {
 	]);
 
 	export type FuncName = keyof typeof abis;
-
-	export const check = (abi: abi.ABI, funcNames?: FuncName[]): boolean => checkAbi(abi, abis, funcNames);
 }
 
 export namespace ERC777.Sender {
@@ -185,8 +194,6 @@ export namespace ERC777.Sender {
 	]);
 
 	export type FuncName = keyof typeof abis;
-
-	export const check = (abi: abi.ABI, funcNames?: FuncName[]): boolean => checkAbi(abi, abis, funcNames);
 }
 
 export namespace ERC1155.Recipient {
@@ -222,8 +229,6 @@ export namespace ERC1155.Recipient {
 	]);
 
 	export type FuncName = keyof typeof abis;
-
-	export const check = (abi: abi.ABI, funcNames?: FuncName[]): boolean => checkAbi(abi, abis, funcNames);
 }
 
 export namespace ERC1363.Recipient {
@@ -244,8 +249,6 @@ export namespace ERC1363.Recipient {
 	]);
 
 	export type FuncName = keyof typeof abis;
-
-	export const check = (abi: abi.ABI, funcNames?: FuncName[]): boolean => checkAbi(abi, abis, funcNames);
 }
 
 export namespace ERC1363.Spender {
@@ -265,6 +268,4 @@ export namespace ERC1363.Spender {
 	]);
 
 	export type FuncName = keyof typeof abis;
-
-	export const check = (abi: abi.ABI, funcNames?: FuncName[]): boolean => checkAbi(abi, abis, funcNames);
 }

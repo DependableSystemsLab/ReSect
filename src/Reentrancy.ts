@@ -4,7 +4,7 @@ import { format as formatDate } from "date-fns";
 import { Etherscan, type RPC, type DebugTraceProvider } from "./providers";
 import { CallType, Counter, Hex, extractSelector, type DebugTrace, type MinimalTrace, type ReverseDebugTrace } from "./utils";
 import { abiFromBytecode, type abi } from "@shazow/whatsabi";
-import { ERC1155, ERC1363, ERC20, ERC721, ERC777 } from "./config/ERC";
+import { checkTrace, ERC1155, ERC1363, ERC20, ERC721, ERC777 } from "./config/ERC";
 
 export namespace Reentrancy {
 	interface ContractInfo {
@@ -519,8 +519,7 @@ export namespace Reentrancy {
 					yield { type: EntranceType.Fallback, trace };
 					continue;
 				}
-				const to = this.#addrInfos.get(trace.to)! as ContractInfo;
-				const type = ERC20.check(to.abi)
+				const type = checkTrace(trace, ERC20.abis)
 					? EntranceType.MaliciousToken
 					// TODO: Could reentrancy possibly be initiated with CREATE?
 					: hookRecipientSelectors.includes(trace.selector!)
