@@ -1,5 +1,5 @@
 import { Promisable, type Arrayable } from "type-fest";
-import { DataSource, In, IsNull, Not, type DataSourceOptions, type EntityTarget, type ObjectLiteral } from "typeorm";
+import { DataSource, In, IsNull, Not, type DataSourceOptions, type EntityTarget, type ObjectLiteral, type Repository } from "typeorm";
 import { Block, CallTrace, Chain, Contract, Transaction } from "./entities";
 import { typeormConfig } from "../config/typeorm";
 import { EtherscanConverter, JsonRpcConverter, TraceConverter } from "../converters";
@@ -45,6 +45,19 @@ export class Database {
 				result[cName] = id[pName];
 		}
 		return result;
+	}
+
+	async #batchSave<Entity extends ObjectLiteral>(
+		entity: EntityTarget<Entity>,
+		entities: Entity[],
+		batchSize: number = 64
+	): Promise<Entity[]> {
+		const source = await this.#source;
+		const savedSlices = await source.manager.transaction(manager => {
+			const repo = manager.getRepository(entity);
+			return repo.save(entities, { chunk: batchSize })
+		});
+		return savedSlices.flat();
 	}
 
 	async close() {
@@ -115,9 +128,8 @@ export class Database {
 	}
 
 	async saveContracts(contracts: Etherscan.ContractCreation[], chainId: number): Promise<Contract[]> {
-		const repo = await this.getRepository(Contract);
 		const entities = contracts.map(c => EtherscanConverter.contractCreationToEntity(c, chainId));
-		return await repo.save(entities);
+		return await this.#batchSave(Contract, entities);
 	}
 
 	async saveBlock(block: RPC.Block, chainId: number): Promise<Block> {
@@ -152,9 +164,8 @@ export class Database {
 
 	async saveTransactions(transactions: RPC.Transaction[], chainId: number): Promise<Transaction[]> {
 		transactions = Array.isArray(transactions) ? transactions : [transactions];
-		const repo = await this.getRepository(Transaction);
 		const entities = transactions.map(t => JsonRpcConverter.transactionToEntity(t, chainId));
-		return await repo.save(entities);
+		return await this.#batchSave(Transaction, entities);
 	}
 
 	async getAttackTransactions(
@@ -206,7 +217,6 @@ export class Database {
 
 	async saveDebugTrace(trace: RPC.Debug.Trace, txHash: Hex.TxHash): Promise<CallTrace[]> {
 		const traces = TraceConverter.debugTraceToEntities(trace, txHash);
-		const manager = await this.getRepository(CallTrace);
-		return await manager.save(traces);
+		return await this.#batchSave(CallTrace, traces);
 	}
 }
