@@ -55,6 +55,12 @@ async function evaluate(
 
 	console.log(chalk.cyan`Running ${txns.length} tests...`);
 	const width = txns.length.toString().length;
+	const stats = {
+		detected: 0,
+		passed: 0,
+		errors: 0,
+		mismatch: {} as Record<string, number>
+	};
 	await txns.forEachAsync(async (txn, index) => {
 		const idxStr = (index + 1).toString().padStart(width, " ");
 		const log = (msg: string) => console.log(`[${idxStr}/${txns.length}] ${msg}`);
@@ -77,19 +83,21 @@ async function evaluate(
 					readonly = true;
 				result.entrances.forEach(e => entranceTypes.add(e.type));
 			}
-		} catch (err) {
+		}
+		catch (err) {
 			log(chalk.red`Analysis Error: ${txn.attack.name}`);
 			console.error(err);
+			++stats.errors;
 			return;
 		}
 
-		if (detected)
-			log(chalk.green`Analysis Complete: ${txn.attack.name}`);
-		else
-			log(chalk.yellow`Analysis Failed: ${txn.attack.name}`);
-
-		const expected: Record<string, any> = { detected: true };
-		const actual: Record<string, any> = { detected };
+		if (!detected) {
+			log(chalk.yellow`No attack detected for ${txn.attack.name}`);
+			return;
+		}
+		++stats.detected;
+		const expected: Record<string, any> = {};
+		const actual: Record<string, any> = {};
 		if (attack.scope != null) {
 			expected.scope = convertScope(attack.scope);
 			actual.scope = scope;
@@ -104,11 +112,29 @@ async function evaluate(
 			if (actual[key] !== expected[key]) {
 				equal = false;
 				log(chalk.red`Expected ${key} to be ${expected[key]}, but got ${actual[key]}`);
+				stats.mismatch[key] ??= 0;
+				++stats.mismatch[key];
 			}
 		}
-		if (equal)
+		if (equal) {
 			log(chalk.green`Test passed: ${txn.attack.name}`);
+			++stats.passed;
+		}
 	}, txns, { maxConcurrency: concurrancy });
+
+	console.log(chalk.white`\nEvaluation Summary:`);
+	const logSummary = (color: chalk.Chalk, label: string, count: number) =>
+		console.log(color`${label}: ${count}/${txns.length} (${(count / txns.length * 100).toFixed(2)}%)`);
+	logSummary(chalk.cyan, `Detection`, stats.detected);
+	logSummary(chalk.green, `Analysis`, stats.passed);
+	if (stats.errors > 0)
+		logSummary(chalk.red, `Errors`, stats.errors);
+	const mismatchKeys = Object.keys(stats.mismatch);
+	if (mismatchKeys.length > 0) {
+		console.log(chalk.yellow`Mismatches:`);
+		for (const key of mismatchKeys)
+			console.log(chalk.yellow`  ${key}: ${stats.mismatch[key]}`);
+	}
 }
 
 const cliParser = yargs()
