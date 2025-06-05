@@ -2,7 +2,7 @@ import "basic-type-extensions";
 import chalk from "chalk";
 import { format as formatDate } from "date-fns";
 import { Etherscan, type RPC, type DebugTraceProvider } from "./providers";
-import { CallType, Counter, Hex, extractSelector, type DebugTrace, type MinimalTrace } from "./utils";
+import { CallType, Counter, Hex, extractSelector, type DebugTrace, type MinimalTrace, type ReverseDebugTrace } from "./utils";
 import { abiFromBytecode, type abi } from "@shazow/whatsabi";
 import { ERC1155, ERC1363, ERC20, ERC721, ERC777 } from "./config/ERC";
 
@@ -16,6 +16,7 @@ export namespace Reentrancy {
 		creationTimestamp: number;
 		creator: Hex.Address;
 		contractFactory?: Hex.Address;
+		author: Hex.Address;
 		abi: abi.ABI;
 	}
 
@@ -34,8 +35,8 @@ export namespace Reentrancy {
 	}
 
 	function inSameGroup(addrA: AddressInfo, addrB: AddressInfo): boolean {
-		const creatorA = addrA.isContract ? addrA.creator : addrA.address;
-		const creatorB = addrB.isContract ? addrB.creator : addrB.address;
+		const creatorA = addrA.isContract ? addrA.author : addrA.address;
+		const creatorB = addrB.isContract ? addrB.author : addrB.address;
 		return creatorA === creatorB;
 	}
 
@@ -82,11 +83,11 @@ export namespace Reentrancy {
 				before = () => {
 					this.beforeCount.add(clone);
 					this.afterCount.clear();
-				}
+				};
 				after = () => {
 					this.beforeCount.minus(clone);
 					this.afterCount.add(clone);
-				}
+				};
 			}
 
 			before?.();
@@ -232,7 +233,10 @@ export namespace Reentrancy {
 
 	export class Analyzer {
 		readonly #rpcProvider: RPC.MultiChainProvider;
+		// Shared between sessions
 		readonly #addrInfos = new Map<Hex.Address, AddressInfo>();
+		readonly #debugTraces = new Map<Hex.TxHash, DebugTrace>();
+		// Unique to each session
 		#senderInfo!: EOAInfo;
 		#victimInfo!: ContractInfo;
 
@@ -259,7 +263,7 @@ export namespace Reentrancy {
 			return set;
 		}
 
-		static #toAnnotatedTrace(trace: DebugTrace, ctx: { index: number }): AnnotatedTrace {
+		static #toAnnotatedTrace(trace: DebugTrace, ctx: { index: number; }): AnnotatedTrace {
 			const result: AnnotatedTrace = {
 				index: ctx.index++,
 				from: trace.from,
@@ -279,15 +283,60 @@ export namespace Reentrancy {
 		}
 
 		/**
-		 * Get all addresses in the call trace and fetch their code from the blockchain.
+		 * @param initCode The init code in hex format without 0x prefix
+		 * @param input The input in hex format without 0x prefix
 		 */
-		async #fetchAddressInfos(callTrace: DebugTrace, chain: number): Promise<void> {
-			const addresses = Analyzer.getAllAddresses(callTrace);
-			this.#senderInfo = { address: callTrace.from, isContract: false };
-			this.#addrInfos.set(callTrace.from, this.#senderInfo);
-			addresses.delete(callTrace.from);
+		static isInitCodeFromInput(initCode: string, input: string): boolean {
+			if (initCode.length > input.length)
+				return false;
+			const SLICE_LENGTH = 16; // 8 bytes
+			const MATCH_COUNT = 4; // 4 random matches
+			const head = initCode.slice(0, SLICE_LENGTH);
+			const tail = initCode.slice(-SLICE_LENGTH);
+			for (let idx = 0; idx < input.length; idx += 2) { // move to the next byte
+				idx = input.indexOf(head, idx);
+				if (idx === -1 || idx + initCode.length > input.length)
+					break;
+				if (tail !== input.slice(idx + initCode.length - SLICE_LENGTH, idx + initCode.length))
+					continue;
+				for (let k = 0; k < MATCH_COUNT; ++k) {
+					const offset = Math.randomInteger(SLICE_LENGTH, initCode.length - SLICE_LENGTH);
+					const initCodeSlice = initCode.slice(offset, offset + SLICE_LENGTH);
+					const inputSlice = input.slice(idx + offset, idx + offset + SLICE_LENGTH);
+					if (initCodeSlice !== inputSlice)
+						continue;
+				}
+				return true;
+			}
+			return false;
+		}
+
+		static *#findCreateTraces(trace: ReverseDebugTrace, calls?: DebugTrace[]): Generator<ReverseDebugTrace> {
+			if (trace.type === CallType.CREATE || trace.type === CallType.CREATE2)
+				yield trace;
+			if (!calls?.length)
+				return;
+			for (const call of calls) {
+				const { calls: subCalls, ...subTrace } = call;
+				const reverseTrace = subTrace as ReverseDebugTrace;
+				reverseTrace.caller = trace;
+				yield* this.#findCreateTraces(reverseTrace, subCalls);
+			}
+		}
+
+		static findCreateTraces(callTrace: DebugTrace): ReverseDebugTrace[] {
+			const { calls, ...trace } = callTrace;
+			return Array.from(this.#findCreateTraces(trace, calls));
+		}
+
+		/**
+		 * Fetch the code of `addresses` and return the addresses that are contracts.
+		 */
+		async #fetchAddressInfos(addresses: Iterable<Hex.Address>, chain: number): Promise<Hex.Address[]> {
+			const addrs = (addresses instanceof Set ? addresses : new Set(addresses))
+				.difference(new Set(this.#addrInfos.keys()));
 			const contracts = new Array<Hex.Address>();
-			for (const address of addresses) {
+			await Array.from(addrs).forEachAsync(async address => {
 				const code = await this.#rpcProvider.getCode(address, "latest", chain);
 				const info = {
 					address,
@@ -299,17 +348,90 @@ export namespace Reentrancy {
 					contracts.push(address);
 				}
 				this.#addrInfos.set(address, info);
+			});
+			return contracts;
+		};
+
+		async #fetchContractInfos(contracts: Iterable<Hex.Address>, chain: number) {
+			const missingInfoContracts = new Set<Hex.Address>();
+			const incompleteInfoContracts = new Set<Hex.Address>();
+			for (const address of contracts) {
+				const info = this.#addrInfos.get(address);
+				if (!info)
+					missingInfoContracts.add(address);
+				else if (!info.isContract)
+					throw new Error(`Not a contract: ${address}`);
+				else if (info.creationTxHash === undefined)
+					incompleteInfoContracts.add(address);
 			}
-			const creations = await this.etherscan.getContractCreation(contracts, chain);
+			if (missingInfoContracts.size > 0) {
+				const fetchedContracts = await this.#fetchAddressInfos(missingInfoContracts, chain);
+				fetchedContracts.forEach(addr => incompleteInfoContracts.add(addr));
+			}
+			const creations = await this.etherscan.getContractCreation(Array.from(incompleteInfoContracts), chain);
+			const factoryCreationTxns = new Set<Hex.TxHash>();
 			for (const creation of creations) {
 				if (creation === undefined)
 					continue;
-				const info = this.#addrInfos.get(creation.contractAddress)! as ContractInfo;
+				const info = this.#addrInfos.get(creation.contractAddress);
+				if (!info || !info.isContract)
+					throw new Error(`Invalid contract info for ${creation.contractAddress}`);
 				info.creationBlock = Number.parseInt(creation.blockNumber);
 				info.creationTxHash = creation.txHash;
 				info.creationTimestamp = Number.parseInt(creation.timestamp);
 				info.creator = creation.contractCreator;
-				info.contractFactory = String.isNullOrEmpty(creation.contractFactory) ? undefined : creation.contractFactory;
+				if (String.isNullOrEmpty(creation.contractFactory))
+					info.author = creation.contractCreator;
+				else {
+					info.contractFactory = creation.contractFactory;
+					factoryCreationTxns.add(creation.txHash);
+				}
+			}
+			// Fetch creation traces
+			const missingCreationTxns = factoryCreationTxns.difference(new Set(this.#debugTraces.keys()));
+			if (missingCreationTxns.size > 0) {
+				await Array.from(missingCreationTxns).forEachAsync(async txHash => {
+					const trace = await this.debugProvider.getDebugTrace(txHash, chain);
+					if (trace === null)
+						throw new Error(`Creation trace for ${txHash} not found`);
+					this.#debugTraces.set(txHash, trace);
+				});
+			}
+			// Determine contract authors
+			const creationTraces = new Map<Hex.Address, ReverseDebugTrace>();
+			for (const hash of factoryCreationTxns) {
+				const trace = this.#debugTraces.get(hash)!;
+				const createTraces = Analyzer.findCreateTraces(trace);
+				for (const createTrace of createTraces)
+					creationTraces.set(createTrace.to, createTrace);
+			}
+			const authorFactories = new Map<ContractInfo, Hex.Address>();
+			for (const contract of contracts) {
+				const info = this.#addrInfos.get(contract)! as ContractInfo;
+				if (info.contractFactory === undefined || info.author)
+					continue;
+				const creationTrace = creationTraces.get(info.address)!;
+				const initCode = Hex.removePrefix(creationTrace.input);
+				let cur = creationTrace;
+				while (cur.caller && Analyzer.isInitCodeFromInput(initCode, cur.caller.input))
+					cur = cur.caller;
+				if (cur.caller === undefined) // Author is the sender of the current transaction
+					info.author = cur.from;
+				else { // Author is the contract factory
+					const factoryInfo = this.#addrInfos.get(cur.to) as ContractInfo | undefined;
+					if (factoryInfo?.author)
+						info.author = factoryInfo.author;
+					else
+						authorFactories.set(info, cur.from);
+				}
+			}
+			const missingAuthorFactories = new Set<Hex.Address>(authorFactories.values());
+			if (missingAuthorFactories.size === 0)
+				return;
+			await this.#fetchContractInfos(missingAuthorFactories, chain);
+			for (const [info, factory] of authorFactories) {
+				const factoryInfo = this.#addrInfos.get(factory) as ContractInfo;
+				info.author = factoryInfo.author;
 			}
 		}
 
@@ -408,17 +530,33 @@ export namespace Reentrancy {
 			}
 		}
 
+		clean() {
+			this.#addrInfos.clear();
+			this.#debugTraces.clear();
+		}
+
 		async *analyze(txHash: Hex.String, chain: number): AsyncGenerator<AnalysisResult> {
-			const rawTrace = await this.debugProvider.getDebugTrace(Hex.verifyTxHash(txHash), chain);
+			// Fetch debug trace
+			const txn = Hex.verifyTxHash(txHash);
+			const rawTrace = this.#debugTraces.get(txn) ?? await this.debugProvider.getDebugTrace(txn, chain);
 			if (rawTrace === null)
 				return;
-			this.#addrInfos.clear();
+			this.#debugTraces.set(txn, rawTrace);
+			// Set sender info
+			this.#senderInfo = this.#addrInfos.get(rawTrace.from) as EOAInfo;
+			if (!this.#senderInfo) {
+				this.#senderInfo = { address: rawTrace.from, isContract: false };
+				this.#addrInfos.set(rawTrace.from, this.#senderInfo);
+			}
+			// Get address infos
 			const callTrace = Analyzer.toAnnotatedTrace(rawTrace);
-			await this.#fetchAddressInfos(callTrace, chain);
+			await this.#fetchAddressInfos(Analyzer.getAllAddresses(callTrace), chain)
+				.then(contracts => this.#fetchContractInfos(contracts, chain));
 			const senderAddresses = Array.from(this.#addrInfos.values())
 				.filter(info => inSameGroup(this.#senderInfo, info));
 			if (senderAddresses.length <= 1)
 				return;
+			// Traverse the call trace to find reentrancy
 			const traverser = new Traverser<AnnotatedTraceInfo>(this.#addrInfos);
 			for (const stack of traverser.traverse(callTrace)) {
 				const traces = this.#annotateTrace(callTrace, stack);

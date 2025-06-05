@@ -19,11 +19,15 @@ export interface MinimalTrace {
 
 export type CallTrace<T extends MinimalTrace = MinimalTrace> = T & {
 	traceAddress: number[];
-}
+};
 
 export type DebugTrace<T extends MinimalTrace = MinimalTrace> = T & {
 	calls?: DebugTrace<T>[];
-}
+};
+
+export type ReverseDebugTrace<T extends MinimalTrace = MinimalTrace> = T & {
+	caller?: ReverseDebugTrace<T>;
+};
 
 export function toCallType(type: string): CallType {
 	type = type.toUpperCase();
@@ -42,7 +46,7 @@ interface TypeUnverifiedDebugTrace {
 export type TypeVerifiedDebugTrace<T extends TypeUnverifiedDebugTrace> = Omit<T, "type" | "calls"> & {
 	type: CallType;
 	calls?: TypeVerifiedDebugTrace<T>[];
-}
+};
 
 export function verifyCallTypes<T extends TypeUnverifiedDebugTrace>(debugTrace: T): TypeVerifiedDebugTrace<T> {
 	debugTrace.type = toCallType(debugTrace.type);
@@ -59,7 +63,7 @@ export function verifyCallTypes<T extends TypeUnverifiedDebugTrace>(debugTrace: 
  * or `null` if the input is empty,
  * or `undefined` if the trace type is not a call type.
  */
-export function extractSelector(trace: { type: CallType, input: Hex }): Hex.Selector | null | undefined {
+export function extractSelector(trace: { type: CallType, input: Hex; }): Hex.Selector | null | undefined {
 	if (!trace.type.includes("CALL")) // CALL, STATICCALL, DELEGATECALL, CALLCODE
 		return undefined;
 	const input = Hex.removePrefix(Hex.toString(trace.input));
