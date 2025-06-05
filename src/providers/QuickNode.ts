@@ -1,7 +1,7 @@
 import { createThrottledFetch, type Fetch } from "fetch-throttler";
 import { Chain as AllChain, type ChainName } from "../config/Chain";
 import { Database } from "../database";
-import { Hex } from "../utils";
+import { Hex, verifyCallTypes } from "../utils";
 import { verifyChain, RPC, type DebugTraceProvider } from "./common";
 import { debugTraceTransaction, getCode, getTransactionByHash } from "./integration";
 
@@ -106,8 +106,9 @@ export class QuickNode
 		return this.request<Hex.String>("eth_call", [request, blockNumber], chain);
 	}
 
-	debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: QuickNode.Chain | number) {
-		return this.request<RPC.Debug.Trace | null>("debug_traceTransaction", [txHash, options], chain);
+	async debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: QuickNode.Chain | number) {
+		const trace = await this.request<QuickNode.DebugTraceRaw | null>("debug_traceTransaction", [txHash, options], chain);
+		return trace ? verifyCallTypes(trace) : null;
 	}
 
 	getDebugTrace(txHash: Hex.TxHash, chain?: number) {
@@ -120,7 +121,7 @@ export class QuickNodeWithDb extends QuickNode {
 
 	constructor(
 		apiKey: QuickNode.ApiKey,
-		chain: QuickNode.Chain | number,
+		chain?: QuickNode.Chain | number,
 		db?: Database
 	) {
 		super(apiKey, chain);
@@ -181,5 +182,10 @@ export namespace QuickNode {
 		[Plan.Accelerate]: 125,
 		[Plan.Scale]: 250,
 		[Plan.Business]: 500
+	};
+
+	export type DebugTraceRaw = Omit<RPC.Debug.Trace, "type" | "calls"> & {
+		type: string;
+		calls?: DebugTraceRaw[];
 	};
 }
