@@ -405,7 +405,7 @@ export namespace Reentrancy {
 				for (const createTrace of createTraces)
 					creationTraces.set(createTrace.to, createTrace);
 			}
-			const authorFactories = new Map<ContractInfo, Hex.Address>();
+			const authorFactories = new Map<Hex.Address, Hex.Address>();
 			for (const contract of contracts) {
 				const info = this.#addrInfos.get(contract)! as ContractInfo;
 				if (info.contractFactory === undefined || info.author)
@@ -422,14 +422,24 @@ export namespace Reentrancy {
 					if (factoryInfo?.author)
 						info.author = factoryInfo.author;
 					else
-						authorFactories.set(info, cur.from);
+						authorFactories.set(contract, cur.from);
 				}
 			}
+			function unionFind(addr: Hex.Address): Hex.Address {
+				const parent = authorFactories.get(addr);
+				if (parent === undefined)
+					return addr;
+				const root = unionFind(parent);
+				authorFactories.set(addr, root);
+				return root;
+			}
+			authorFactories.keys().forEach(unionFind);
 			const missingAuthorFactories = new Set<Hex.Address>(authorFactories.values());
 			if (missingAuthorFactories.size === 0)
 				return;
 			await this.#fetchContractInfos(missingAuthorFactories, chain);
-			for (const [info, factory] of authorFactories) {
+			for (const [contract, factory] of authorFactories) {
+				const info = this.#addrInfos.get(contract) as ContractInfo;
 				const factoryInfo = this.#addrInfos.get(factory) as ContractInfo;
 				info.author = factoryInfo.author;
 			}
