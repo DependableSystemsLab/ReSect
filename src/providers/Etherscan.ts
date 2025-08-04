@@ -83,7 +83,8 @@ export class Etherscan {
 		module: string,
 		action: string,
 		chain?: number,
-		params?: QueryObject
+		params?: QueryObject,
+		verifyStatus: boolean = true
 	): Promise<T> {
 		params ??= {};
 		const searchParams = toURLSearchParams({
@@ -104,7 +105,7 @@ export class Etherscan {
 		const resp = await response.json() as Etherscan.Response<T>;
 		if (!response.ok)
 			throw new Error(`Etherscan API error: ${response.status} ${response.statusText}`);
-		if (resp.status !== "1")
+		if (verifyStatus && resp.status !== "1")
 			throw new Error(`Etherscan API error: ${resp.status} ${resp.message} ${resp.result}`);
 		return resp.result;
 	}
@@ -174,16 +175,16 @@ export class Etherscan {
 			contractAddresses = addresses.filter(c => !results.has(c));
 		}
 		if (contractAddresses.length <= 5) {
-			await this.#request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses })
-				.then(rs => rs.forEach(c => results.set(c.contractAddress, c)));
+			await this.#request<Etherscan.ContractCreation[] | null>("contract", "getcontractcreation", chain, { contractAddresses }, false)
+				.then(rs => rs?.forEach(c => results.set(c.contractAddress, c)));
 		}
 		else {
 			const slices = new Array(Math.ceil(contractAddresses.length / 5));
 			for (let i = 0; i < contractAddresses.length; i += 5)
 				slices[i / 5] = contractAddresses.slice(i, i + 5);
 			await slices.forEachAsync(slice =>
-				this.#request<Etherscan.ContractCreation[]>("contract", "getcontractcreation", chain, { contractAddresses: slice })
-					.then(rs => rs.forEach(c => results.set(c.contractAddress, c)))
+				this.#request<Etherscan.ContractCreation[] | null>("contract", "getcontractcreation", chain, { contractAddresses: slice }, false)
+					.then(rs => rs?.forEach(c => results.set(c.contractAddress, c)))
 			);
 		}
 		if (this.#db) {
