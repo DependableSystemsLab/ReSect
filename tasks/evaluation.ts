@@ -52,14 +52,28 @@ async function evaluate(
 		: useDatabase
 			? new TenderlyWithDb(tenderlyNodeAccessKeys, undefined, etherscan.geth, database)
 			: new Tenderly(tenderlyNodeAccessKeys);
-
 	console.log(chalk.cyan`Running ${txns.length} tests...`);
 	const width = txns.length.toString().length;
+	const errors = {
+		chainCompatibility(err) {
+			if (!(err instanceof Error))
+				return false;
+			const msg = err.message;
+			return msg.startsWith("Invalid chain ID:") || msg.startsWith("Invalid txhash:");
+		},
+		network(err) {
+			if (err instanceof Response)
+				return true;
+			if (!(err instanceof Error))
+				return false;
+			return err.message === "fetch failed" || err instanceof AggregateError && err.errors.every(err => err.message === "fetch failed");
+		},
+	} satisfies Record<string, (err: any) => boolean>;
 	const stats = {
 		detected: 0,
 		passed: 0,
-		errors: 0,
-		mismatch: {} as Record<string, number>
+		errors: { total: 0 } as Record<string, number>,
+		mismatch: { total: 0 } as Record<string, number>
 	};
 	await txns.forEachAsync(async (txn, index) => {
 		const idxStr = (index + 1).toString().padStart(width, " ");
@@ -87,7 +101,23 @@ async function evaluate(
 		catch (err) {
 			log(chalk.red`Analysis Error: ${txn.attack.name}`);
 			console.error(err);
-			++stats.errors;
+			let errorMatched = false;
+			if (err instanceof Error) {
+				let key: keyof typeof errors;
+				for (key in errors) {
+					if (errors[key](err)) {
+						stats.errors[key] ??= 0;
+						++stats.errors[key];
+						errorMatched = true;
+						break;
+					}
+				}
+			}
+			if (!errorMatched) {
+				stats.errors.other ??= 0;
+				++stats.errors.other;
+			}
+			++stats.errors.total;
 			return;
 		}
 
@@ -116,24 +146,34 @@ async function evaluate(
 				++stats.mismatch[key];
 			}
 		}
-		if (equal) {
+		if (!equal)
+			++stats.mismatch.total;
+		else {
 			log(chalk.green`Test passed: ${txn.attack.name}`);
 			++stats.passed;
 		}
 	}, txns, { maxConcurrency: concurrancy });
 
 	console.log(chalk.white`\nEvaluation Summary:`);
-	const logSummary = (color: chalk.Chalk, label: string, count: number) =>
-		console.log(color`${label}: ${count}/${txns.length} (${(count / txns.length * 100).toFixed(2)}%)`);
-	logSummary(chalk.cyan, `Detection`, stats.detected);
-	logSummary(chalk.green, `Analysis`, stats.passed);
-	if (stats.errors > 0)
-		logSummary(chalk.red, `Errors`, stats.errors);
-	const mismatchKeys = Object.keys(stats.mismatch);
-	if (mismatchKeys.length > 0) {
-		console.log(chalk.yellow`Mismatches:`);
-		for (const key of mismatchKeys)
-			console.log(chalk.yellow`  ${key}: ${stats.mismatch[key]}`);
+	const logStats = (color: chalk.Chalk, label: string, count: number, total: number) =>
+		console.log(color`${label}: ${count}/${total} (${(count / total * 100).toFixed(2)}%)`);
+	logStats(chalk.cyan, `Detection`, stats.detected, txns.length - stats.errors.total);
+	logStats(chalk.green, `Analysis`, stats.passed, stats.detected);
+	let keys = Object.keys(stats.mismatch);
+	if (keys.length > 1) {
+		logStats(chalk.yellow, `Mismatches`, stats.mismatch.total, stats.detected);
+		for (const key of keys) {
+			if (key !== "total")
+				logStats(chalk.yellow, `  ${key}`, stats.mismatch[key], stats.detected);
+		}
+	}
+	keys = Object.keys(stats.errors);
+	if (keys.length > 1) {
+		logStats(chalk.red, `Errors`, stats.errors.total, txns.length);
+		for (const key of keys) {
+			if (key !== "total")
+				logStats(chalk.red, `  ${key}`, stats.errors[key], txns.length);
+		}
 	}
 }
 
