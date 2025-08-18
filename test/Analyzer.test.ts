@@ -145,6 +145,16 @@ describe("Reentrancy Analyzer", () => {
 		readonly: true
 	}));
 
+	test("Self-Destruct", testOnCase({
+		isReentrancy: true,
+		name: "NFT Trader Attack 1",
+		chain: "Ethereum",
+		txHash: "0x3dc115307c7b79e9ff0afe4c1a0796c22e366a47b47ed2d82194bcd59bb4bd46",
+		scope: Reentrancy.Scope.CrossFunction,
+		entranceType: Reentrancy.EntranceType.ERCHook,
+		readonly: false
+	}));
+
 	test("Non-Reentrancy", testOnCase({
 		isReentrancy: false,
 		name: "Pythia",

@@ -15,6 +15,7 @@ export interface MinimalTrace {
 	to: Hex.Address;
 	type: CallType;
 	input: Hex.String;
+	output?: Hex.String;
 }
 
 export type CallTrace<T extends MinimalTrace = MinimalTrace> = T & {

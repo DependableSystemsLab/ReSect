@@ -42,7 +42,7 @@ export namespace RPC {
 			id: string;
 			slug: string;
 			message: string;
-		}
+		};
 	}
 
 	export type BlockTag = "earliest" | "latest" | "safe" | "finalized" | "pending";
@@ -116,7 +116,7 @@ export namespace RPC {
 		[M in keyof P]: P[M] extends (...args: any[]) => infer R
 		? (...args: [...Parameters<P[M]>, chain?: number]) => R
 		: P[M];
-	} & { chain: number };
+	} & { chain: number; };
 
 	export abstract class MultiChainProviderBase<N extends ChainName = ChainName> {
 		static #rpcId = 0;
@@ -239,7 +239,6 @@ export namespace RPC.Trace {
 
 export namespace RPC.Debug {
 	export interface TraceInfo extends MinimalTrace {
-		output?: Hex.String;
 		value?: Hex.String;
 		gas: Hex.String;
 		gasUsed: Hex.String;

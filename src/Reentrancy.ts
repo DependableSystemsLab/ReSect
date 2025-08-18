@@ -329,74 +329,81 @@ export namespace Reentrancy {
 			return Array.from(this.#findCreateTraces(trace, calls));
 		}
 
-		/**
-		 * Fetch the code of `addresses` and return the addresses that are contracts.
-		 */
-		async #fetchAddressInfos(addresses: Iterable<Hex.Address>, chain: number): Promise<Hex.Address[]> {
-			const addrs = (addresses instanceof Set ? addresses : new Set(addresses))
-				.difference(new Set(this.#addrInfos.keys()));
+		static findCreateTrace<T extends MinimalTrace>(callTrace: DebugTrace<T>, address: Hex.Address): DebugTrace<T> | undefined {
+			if (callTrace.to === address && (callTrace.type === CallType.CREATE || callTrace.type === CallType.CREATE2))
+				return callTrace;
+			if (!callTrace.calls?.length)
+				return undefined;
+			for (const call of callTrace.calls) {
+				const result = this.findCreateTrace(call, address);
+				if (result)
+					return result;
+			}
+		}
+
+		async #getDebugTrace(txHash: Hex.TxHash, chain: number): Promise<DebugTrace> {
+			let trace: DebugTrace | null | undefined = this.#debugTraces.get(txHash);
+			if (!trace) {
+				trace = await this.debugProvider.getDebugTrace(txHash, chain);
+				if (trace === null)
+					throw new Error(`Failed to retrieve debug trace for ${txHash}`);
+				this.#debugTraces.set(txHash, trace);
+			}
+			return trace;
+		}
+
+		async #fetchAddressInfos(addresses: Iterable<Hex.Address>, chain: number) {
+			const addrSet = addresses instanceof Set ? addresses as Set<Hex.Address> : new Set(addresses);
+			const addrs = Array.from(addrSet.difference(new Set(this.#addrInfos.keys())));
+			const creations = await this.etherscan.getContractCreation(addrs, chain);
 			const contracts = new Array<Hex.Address>();
-			await Array.from(addrs).forEachAsync(async address => {
-				const code = await this.#rpcProvider.getCode(address, "latest", chain);
-				const info = {
-					address,
-					isContract: code !== "0x"
-				} as AddressInfo;
-				if (info.isContract) {
-					info.code = code;
-					info.abi = abiFromBytecode(code);
+			const factoryCreationTxns = new Set<Hex.TxHash>();
+			for (let i = 0; i < creations.length; ++i) {
+				const creation = creations[i];
+				const address = addrs[i];
+				let info: AddressInfo;
+				if (creation === null) {
+					info = {
+						address,
+						isContract: false
+					};
+				}
+				else {
 					contracts.push(address);
+					let code = await this.#rpcProvider.getCode(address, "latest", chain);
+					if (code === "0x") {
+						const trace = await this.#getDebugTrace(creation.txHash, chain);
+						const createTrace = Analyzer.findCreateTrace(trace, address);
+						if (createTrace === undefined)
+							throw new Error(`Failed to find create trace for ${address}`);
+						const output = createTrace.output;
+						if (output === undefined || output === "0x")
+							throw new Error(`Failed to retrieve creation output for ${address}`);
+						code = output;
+					}
+					info = {
+						address,
+						isContract: true,
+						code,
+						abi: abiFromBytecode(code),
+						creationBlock: Number.parseInt(creation.blockNumber),
+						creationTxHash: creation.txHash,
+						creationTimestamp: Number.parseInt(creation.timestamp),
+						creator: creation.contractCreator
+					} as ContractInfo;
+					if (String.isNullOrEmpty(creation.contractFactory))
+						info.author = creation.contractCreator;
+					else {
+						info.contractFactory = creation.contractFactory;
+						factoryCreationTxns.add(creation.txHash);
+					}
 				}
 				this.#addrInfos.set(address, info);
-			});
-			return contracts;
-		};
-
-		async #fetchContractInfos(contracts: Iterable<Hex.Address>, chain: number) {
-			const missingInfoContracts = new Set<Hex.Address>();
-			const incompleteInfoContracts = new Set<Hex.Address>();
-			for (const address of contracts) {
-				const info = this.#addrInfos.get(address);
-				if (!info)
-					missingInfoContracts.add(address);
-				else if (!info.isContract)
-					throw new Error(`Not a contract: ${address}`);
-				else if (info.creationTxHash === undefined)
-					incompleteInfoContracts.add(address);
-			}
-			if (missingInfoContracts.size > 0) {
-				const fetchedContracts = await this.#fetchAddressInfos(missingInfoContracts, chain);
-				fetchedContracts.forEach(addr => incompleteInfoContracts.add(addr));
-			}
-			const creations = await this.etherscan.getContractCreation(Array.from(incompleteInfoContracts), chain);
-			const factoryCreationTxns = new Set<Hex.TxHash>();
-			for (const creation of creations) {
-				if (creation === undefined)
-					continue;
-				const info = this.#addrInfos.get(creation.contractAddress);
-				if (!info || !info.isContract)
-					throw new Error(`Invalid contract info for ${creation.contractAddress}`);
-				info.creationBlock = Number.parseInt(creation.blockNumber);
-				info.creationTxHash = creation.txHash;
-				info.creationTimestamp = Number.parseInt(creation.timestamp);
-				info.creator = creation.contractCreator;
-				if (String.isNullOrEmpty(creation.contractFactory))
-					info.author = creation.contractCreator;
-				else {
-					info.contractFactory = creation.contractFactory;
-					factoryCreationTxns.add(creation.txHash);
-				}
 			}
 			// Fetch creation traces
 			const missingCreationTxns = factoryCreationTxns.difference(new Set(this.#debugTraces.keys()));
-			if (missingCreationTxns.size > 0) {
-				await Array.from(missingCreationTxns).forEachAsync(async txHash => {
-					const trace = await this.debugProvider.getDebugTrace(txHash, chain);
-					if (trace === null)
-						throw new Error(`Creation trace for ${txHash} not found`);
-					this.#debugTraces.set(txHash, trace);
-				});
-			}
+			if (missingCreationTxns.size > 0)
+				await Array.from(missingCreationTxns).mapAsync(txHash => this.#getDebugTrace(txHash, chain));
 			// Determine contract authors
 			const creationTraces = new Map<Hex.Address, ReverseDebugTrace>();
 			for (const hash of factoryCreationTxns) {
@@ -410,7 +417,9 @@ export namespace Reentrancy {
 				const info = this.#addrInfos.get(contract)! as ContractInfo;
 				if (info.contractFactory === undefined || info.author)
 					continue;
-				const creationTrace = creationTraces.get(info.address)!;
+				const creationTrace = creationTraces.get(info.address);
+				if (creationTrace === undefined)
+					throw new Error(`Creation trace for ${info.address} not found`);
 				const initCode = Hex.removePrefix(creationTrace.input);
 				let cur = creationTrace;
 				while (cur.caller && Analyzer.isInitCodeFromInput(initCode, cur.caller.input))
@@ -437,7 +446,7 @@ export namespace Reentrancy {
 			const missingAuthorFactories = new Set<Hex.Address>(authorFactories.values());
 			if (missingAuthorFactories.size === 0)
 				return;
-			await this.#fetchContractInfos(missingAuthorFactories, chain);
+			await this.#fetchAddressInfos(missingAuthorFactories, chain);
 			for (const [contract, factory] of authorFactories) {
 				const info = this.#addrInfos.get(contract) as ContractInfo;
 				const factoryInfo = this.#addrInfos.get(factory) as ContractInfo;
@@ -559,8 +568,7 @@ export namespace Reentrancy {
 			}
 			// Get address infos
 			const callTrace = Analyzer.toAnnotatedTrace(rawTrace);
-			await this.#fetchAddressInfos(Analyzer.getAllAddresses(callTrace), chain)
-				.then(contracts => this.#fetchContractInfos(contracts, chain));
+			await this.#fetchAddressInfos(Analyzer.getAllAddresses(callTrace), chain);
 			const senderAddresses = Array.from(this.#addrInfos.values())
 				.filter(info => inSameGroup(this.#senderInfo, info));
 			if (senderAddresses.length <= 1)
