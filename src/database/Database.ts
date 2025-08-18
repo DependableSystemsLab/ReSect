@@ -55,7 +55,7 @@ export class Database {
 		const source = await this.#source;
 		const savedSlices = await source.manager.transaction(manager => {
 			const repo = manager.getRepository(entity);
-			return repo.save(entities, { chunk: batchSize })
+			return repo.save(entities, { chunk: batchSize });
 		});
 		return savedSlices.flat();
 	}
@@ -114,17 +114,24 @@ export class Database {
 		return await repo.save(entity);
 	}
 
-	async getContracts(addresses: Hex.String[]): Promise<Etherscan.ContractCreation[]> {
+	async getContracts(addresses: Hex.String[]): Promise<(Etherscan.ContractCreation | null | undefined)[]> {
 		const addrs = addresses.map(a => Hex.removePrefix(Hex.verifyAddress(a)));
 		const repo = await this.getRepository(Contract);
 		const entities = await repo.find({
-			where: {
-				address: In(addrs),
-				creationTxHash: Not(IsNull())
-			},
+			where: { address: In(addrs) },
 			relations: { creationTransaction: { block: true } }
 		});
-		return entities.map(EtherscanConverter.entityToContractCreation);
+		const map = new Map<Hex.AddressNP, Etherscan.ContractCreation | null>();
+		for (const entity of entities) {
+			const result = EtherscanConverter.entityToContractCreation(entity);
+			map.set(entity.address, result);
+		}
+		return addrs.map(a => map.get(a));
+	}
+
+	async saveEOAs(eoas: Hex.Address[], chainId: number): Promise<void> {
+		const entities = eoas.map(eoa => new Contract(eoa, chainId));
+		await this.#batchSave(Contract, entities);
 	}
 
 	async saveContracts(contracts: Etherscan.ContractCreation[], chainId: number): Promise<Contract[]> {

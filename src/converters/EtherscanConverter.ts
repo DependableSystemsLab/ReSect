@@ -12,7 +12,9 @@ export namespace EtherscanConverter {
 		return entity;
 	}
 
-	export function entityToContractCreation(entity: Contract): Etherscan.ContractCreation {
+	export function entityToContractCreation(entity: Contract): Etherscan.ContractCreation | null {
+		if (entity.code === null) // Not a contract
+			return null;
 		const creation = {
 			contractAddress: `0x${entity.address}`
 		} as Etherscan.ContractCreation;

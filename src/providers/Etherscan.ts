@@ -161,17 +161,21 @@ export class Etherscan {
 		);
 	}
 
-	async getContractCreation(contractAddresses: Arrayable<Hex.String>, chain?: number): Promise<(Etherscan.ContractCreation | undefined)[]> {
+	async getContractCreation(contractAddresses: Arrayable<Hex.String>, chain?: number): Promise<(Etherscan.ContractCreation | null)[]> {
 		if (!Array.isArray(contractAddresses))
 			contractAddresses = [contractAddresses];
 		chain ??= this.#chainId;
 		const addresses = contractAddresses.map(Hex.verifyAddress);
-		const results = new Map<string, Etherscan.ContractCreation>();
+		const results = new Map<Hex.Address, Etherscan.ContractCreation | null>();
 		if (this.#db) {
-			await this.#db.getContracts(addresses)
-				.then(cs => cs.forEach(c => results.set(c.contractAddress, c)));
+			const contracts = await this.#db.getContracts(addresses);
+			for (let i = 0; i < addresses.length; ++i) {
+				const contract = contracts[i];
+				if (contract !== undefined)
+					results.set(addresses[i], contract);
+			}
 			if (results.size === addresses.length)
-				return addresses.map(a => results.get(a));
+				return addresses.map(a => results.get(a)!);
 			contractAddresses = addresses.filter(c => !results.has(c));
 		}
 		if (contractAddresses.length <= 5) {
@@ -188,7 +192,8 @@ export class Etherscan {
 			);
 		}
 		if (this.#db) {
-			const newCreations = contractAddresses.map(c => results.get(c as string)).filter(c => c !== undefined);
+			const eoas = (contractAddresses as Hex.Address[]).filter(c => results.get(c) === null);
+			const newCreations = contractAddresses.map(c => results.get(c as Hex.Address)).filter(c => c != undefined);
 			const txHashes = newCreations.map(c => c.txHash).unique();
 			const existing = await this.#db.filterTxHashes(txHashes);
 			if (existing.length < txHashes.length) {
@@ -200,10 +205,12 @@ export class Etherscan {
 				}
 				await this.#db.saveTransactions(txs as RPC.Transaction[], chain);
 			}
+			if (eoas.length > 0)
+				await this.#db.saveEOAs(eoas, chain ?? this.#chainId);
 			if (newCreations.length > 0)
 				await this.#db.saveContracts(newCreations, chain ?? this.#chainId);
 		}
-		return addresses.map(a => results.get(a));
+		return addresses.map(a => results.get(a)!);
 	}
 
 	getLogs(address: Hex.String, topics?: string[], topicOpr?: "and" | "or", blockRange?: Etherscan.BlockRange, pagination?: Etherscan.Pagination, chain?: number): Promise<any[]>;
