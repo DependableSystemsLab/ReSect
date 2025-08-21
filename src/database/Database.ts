@@ -114,19 +114,17 @@ export class Database {
 		return await repo.save(entity);
 	}
 
-	async getContracts(addresses: Hex.String[]): Promise<(Etherscan.ContractCreation | null | undefined)[]> {
+	async getContracts(addresses: Hex.String[]): Promise<(Etherscan.ContractCreation | { eoaAddress: Hex.Address; })[]> {
 		const addrs = addresses.map(a => Hex.removePrefix(Hex.verifyAddress(a)));
 		const repo = await this.getRepository(Contract);
 		const entities = await repo.find({
 			where: { address: In(addrs) },
 			relations: { creationTransaction: { block: true } }
 		});
-		const map = new Map<Hex.AddressNP, Etherscan.ContractCreation | null>();
-		for (const entity of entities) {
+		return entities.map(entity => {
 			const result = EtherscanConverter.entityToContractCreation(entity);
-			map.set(entity.address, result);
-		}
-		return addrs.map(a => map.get(a));
+			return result ?? { eoaAddress: Hex.addPrefix(entity.address) };
+		});
 	}
 
 	async saveEOAs(eoas: Hex.Address[], chainId: number): Promise<void> {

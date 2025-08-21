@@ -168,11 +168,11 @@ export class Etherscan {
 		const addresses = contractAddresses.map(Hex.verifyAddress);
 		const results = new Map<Hex.Address, Etherscan.ContractCreation | null>();
 		if (this.#db) {
-			const contracts = await this.#db.getContracts(addresses);
-			for (let i = 0; i < addresses.length; ++i) {
-				const contract = contracts[i];
-				if (contract !== undefined)
-					results.set(addresses[i], contract);
+			for (const contract of await this.#db.getContracts(addresses)) {
+				if ("eoaAddress" in contract)
+					results.set(contract.eoaAddress, null);
+				else if (contract.contractCreator)
+					results.set(contract.contractAddress, contract);
 			}
 			if (results.size === addresses.length)
 				return addresses.map(a => results.get(a)!);
