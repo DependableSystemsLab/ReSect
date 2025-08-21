@@ -5,7 +5,7 @@ import { Hex, type NumStr } from "../utils";
 export namespace EtherscanConverter {
 	export function contractCreationToEntity(creation: Etherscan.ContractCreation, chainId: number): Contract {
 		const entity = new Contract(creation.contractAddress, chainId);
-		entity.creationTxHash = Hex.removePrefix(creation.txHash);
+		entity.creationTxHash = creation.txHash.startsWith("GENESIS_") ? null : Hex.removePrefix(creation.txHash as Hex.TxHash);
 		entity.creator = Hex.removePrefix(creation.contractCreator);
 		if (creation.contractFactory !== "")
 			entity.contractFactory = Hex.removePrefix(creation.contractFactory);
@@ -21,7 +21,7 @@ export namespace EtherscanConverter {
 		if (entity.creationTxHash)
 			creation.txHash = `0x${entity.creationTxHash}`;
 		if (entity.creator)
-			creation.contractCreator = `0x${entity.creator}`;
+			creation.contractCreator = entity.creator === "GENESIS" ? "GENESIS" : `0x${entity.creator}`;
 		if (entity.contractFactory)
 			creation.contractFactory = `0x${entity.contractFactory}`;
 		const block = entity.creationBlock;

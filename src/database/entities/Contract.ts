@@ -27,7 +27,7 @@ export class Contract {
 		length: 40,
 		nullable: true
 	})
-	creator?: Hex.AddressNP | null;
+	creator?: Hex.AddressNP | "GENESIS" | null;
 
 	@Column("character", {
 		name: "contract_factory",

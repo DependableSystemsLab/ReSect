@@ -16,7 +16,7 @@ export namespace Reentrancy {
 		creationTimestamp: number;
 		creator: Hex.Address;
 		contractFactory?: Hex.Address;
-		author: Hex.Address;
+		author: Hex.Address | "GENESIS";
 		abi: abi.ABI;
 	}
 
@@ -372,7 +372,7 @@ export namespace Reentrancy {
 					contracts.push(address);
 					let code = await this.#rpcProvider.getCode(address, "latest", chain);
 					if (code === "0x") {
-						const trace = await this.#getDebugTrace(creation.txHash, chain);
+						const trace = await this.#getDebugTrace(creation.txHash as Hex.TxHash, chain);
 						const createTrace = Analyzer.findCreateTrace(trace, address);
 						if (createTrace === undefined)
 							throw new Error(`Failed to find create trace for ${address}`);
@@ -392,7 +392,7 @@ export namespace Reentrancy {
 						info.author = creation.contractCreator;
 					else {
 						info.contractFactory = creation.contractFactory;
-						factoryCreationTxns.add(creation.txHash);
+						factoryCreationTxns.add(creation.txHash as Hex.TxHash);
 					}
 				}
 				this.#addrInfos.set(address, info);

@@ -194,7 +194,9 @@ export class Etherscan {
 		if (this.#db) {
 			const eoas = (contractAddresses as Hex.Address[]).filter(c => results.get(c) === null);
 			const newCreations = contractAddresses.map(c => results.get(c as Hex.Address)).filter(c => c != undefined);
-			const txHashes = newCreations.map(c => c.txHash).unique();
+			const txHashes = newCreations.map(c => c.txHash)
+				.filter((tx): tx is Hex.TxHash => !tx.startsWith("GENESIS_"))
+				.unique();
 			const existing = await this.#db.filterTxHashes(txHashes);
 			if (existing.length < txHashes.length) {
 				const missing = Array.difference(txHashes, existing);
@@ -304,8 +306,8 @@ export namespace Etherscan {
 		/**
 		 * EOA address of the sender of the transaction within which the contract was created.
 		 */
-		contractCreator: Hex.Address;
-		txHash: Hex.TxHash;
+		contractCreator: Hex.Address | "GENESIS";
+		txHash: Hex.TxHash | `GENESIS_${Hex.AddressNP}`;
 		blockNumber: NumStr;
 		timestamp: NumStr;
 		/**

@@ -155,6 +155,16 @@ describe("Reentrancy Analyzer", () => {
 		readonly: false
 	}));
 
+	test("Genesis Transactions", testOnCase({
+		isReentrancy: true,
+		name: "Sumer Money Attack",
+		chain: "Base",
+		txHash: "0x619c44af9fedb8f5feea2dcae1da94b6d7e5e0e7f4f4a99352b6c4f5e43a4661",
+		scope: Reentrancy.Scope.CrossFunction,
+		entranceType: Reentrancy.EntranceType.Fallback,
+		readonly: false
+	}));
+
 	test("Non-Reentrancy", testOnCase({
 		isReentrancy: false,
 		name: "Pythia",
