@@ -376,10 +376,7 @@ export namespace Reentrancy {
 						const createTrace = Analyzer.findCreateTrace(trace, address);
 						if (createTrace === undefined)
 							throw new Error(`Failed to find create trace for ${address}`);
-						const output = createTrace.output;
-						if (output === undefined || output === "0x")
-							throw new Error(`Failed to retrieve creation output for ${address}`);
-						code = output;
+						code = createTrace.output ?? "0x"; // CREATE traces could return nothing, example: 0x8c07a96fd504f34211771c2fa7ce37f9565f6f00
 					}
 					info = {
 						address,
