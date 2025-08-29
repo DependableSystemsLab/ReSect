@@ -6,8 +6,8 @@
 	"scripts": {
 		"build": "tsc -b tsconfig.build.json",
 		"test": "jest",
-		"evaluate:first": "dotenvx run -- tsx tasks/evaluation.ts -- --collection=first",
-		"evaluate:all": "dotenvx run -- tsx tasks/evaluation.ts -- --collection=all"
+		"evaluate:first": "dotenvx run -- tsx tasks/evaluation.ts --collection=first",
+		"evaluate:all": "dotenvx run -- tsx tasks/evaluation.ts --collection=all"
 	},
 	"author": "Yuqi Liu",
 	"license": "MIT",

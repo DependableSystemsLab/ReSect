@@ -5,17 +5,22 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "pnpm: start",
+			"name": "pnpm: evaluate:first",
 			"request": "launch",
 			"preLaunchTask": "pnpm: build",
-			"runtimeArgs": [
-				"run",
-				"start"
-			],
+			"runtimeArgs": ["run", "evaluate:first"],
 			"runtimeExecutable": "pnpm",
-			"skipFiles": [
-				"<node_internals>/**"
-			],
+			"skipFiles": ["<node_internals>/**"],
+			"type": "node",
+			"console": "integratedTerminal"
+		},
+		{
+			"name": "pnpm: evaluate:all",
+			"request": "launch",
+			"preLaunchTask": "pnpm: build",
+			"runtimeArgs": ["run", "evaluate:all"],
+			"runtimeExecutable": "pnpm",
+			"skipFiles": ["<node_internals>/**"],
 			"type": "node",
 			"console": "integratedTerminal"
 		}
