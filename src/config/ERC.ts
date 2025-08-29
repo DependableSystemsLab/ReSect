@@ -136,6 +136,42 @@ export namespace ERC20 {
 	export type FuncName = keyof typeof abis;
 }
 
+export namespace ERC223.Recipient {
+	export const abis = constructAbi([
+		{
+			name: "tokenReceived",
+			inputs: [
+				{ type: "address", name: "_from" },
+				{ type: "uint256", name: "_value" },
+				{ type: "bytes", name: "_data" }
+			],
+			outputs: [
+				{ type: "bytes4", name: "selector" }
+			]
+		}
+	]);
+
+	export type FuncName = keyof typeof abis;
+}
+
+export namespace ERC677.Recipient {
+	export const abis = constructAbi([
+		{
+			name: "onTokenTransfer",
+			inputs: [
+				{ type: "address", name: "from" },
+				{ type: "uint256", name: "amount" },
+				{ type: "bytes", name: "data" }
+			],
+			outputs: [
+				{ type: "bool", name: "success" }
+			]
+		}
+	]);
+
+	export type FuncName = keyof typeof abis;
+}
+
 export namespace ERC721.Recipient {
 	export const abis = constructAbi([
 		{

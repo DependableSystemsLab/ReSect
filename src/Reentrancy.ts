@@ -4,7 +4,7 @@ import { format as formatDate } from "date-fns";
 import { Etherscan, type RPC, type DebugTraceProvider } from "./providers";
 import { CallType, Counter, Hex, extractSelector, type DebugTrace, type MinimalTrace, type ReverseDebugTrace } from "./utils";
 import { abiFromBytecode, type abi } from "@shazow/whatsabi";
-import { checkTrace, ERC1155, ERC1363, ERC20, ERC721, ERC777 } from "./config/ERC";
+import { checkTrace, ERC1155, ERC1363, ERC20, ERC223, ERC677, ERC721, ERC777 } from "./config/ERC";
 
 export namespace Reentrancy {
 	interface ContractInfo {
@@ -224,10 +224,14 @@ export namespace Reentrancy {
 	}
 
 	const hookRecipientSelectors = [
+		ERC223.Recipient.abis.tokenReceived.selector,
+		ERC677.Recipient.abis.onTokenTransfer.selector,
 		ERC721.Recipient.abis.onERC721Received.selector,
+		ERC777.Sender.abis.tokensToSend.selector,
 		ERC777.Recipient.abis.tokensReceived.selector,
 		ERC1155.Recipient.abis.onERC1155Received.selector,
 		ERC1155.Recipient.abis.onERC1155BatchReceived.selector,
+		ERC1363.Spender.abis.onApprovalReceived.selector,
 		ERC1363.Recipient.abis.onTransferReceived.selector
 	];
 
