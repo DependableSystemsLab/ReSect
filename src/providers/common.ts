@@ -143,10 +143,8 @@ export namespace RPC {
 					params
 				})
 			});
-			if (!result.ok) {
-				const text = await result.text();
-				throw new Error(`${this.name} API error: ${text}`);
-			}
+			if (!result.ok)
+				throw result;
 			const json = await result.json() as RPC.Response<T> | RPC.Error;
 			if ("error" in json) {
 				const error = json.error;

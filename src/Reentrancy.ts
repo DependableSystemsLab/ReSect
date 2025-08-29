@@ -223,6 +223,12 @@ export namespace Reentrancy {
 		}
 	}
 
+	export class TraceNotFoundError extends Error {
+		constructor(public readonly txHash: Hex.TxHash, message?: string) {
+			super(message ?? `Debug trace for transaction ${txHash} not found`);
+		}
+	}
+
 	const hookRecipientSelectors = [
 		ERC223.Recipient.abis.tokenReceived.selector,
 		ERC677.Recipient.abis.onTokenTransfer.selector,
@@ -350,7 +356,7 @@ export namespace Reentrancy {
 			if (!trace) {
 				trace = await this.debugProvider.getDebugTrace(txHash, chain);
 				if (trace === null)
-					throw new Error(`Failed to retrieve debug trace for ${txHash}`);
+					throw new TraceNotFoundError(txHash);
 				this.#debugTraces.set(txHash, trace);
 			}
 			return trace;
@@ -559,7 +565,7 @@ export namespace Reentrancy {
 			const txn = Hex.verifyTxHash(txHash);
 			const rawTrace = this.#debugTraces.get(txn) ?? await this.debugProvider.getDebugTrace(txn, chain);
 			if (rawTrace === null)
-				return;
+				throw new TraceNotFoundError(txn);
 			this.#debugTraces.set(txn, rawTrace);
 			// Set sender info
 			this.#senderInfo = this.#addrInfos.get(rawTrace.from) as EOAInfo;

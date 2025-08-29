@@ -61,6 +61,13 @@ async function evaluate(
 			const msg = err.message;
 			return msg.startsWith("Invalid chain ID:") || msg.startsWith("Invalid txhash:");
 		},
+		notFound(err) {
+			if (err instanceof Reentrancy.TraceNotFoundError)
+				return true;
+			if (err instanceof AggregateError)
+				return err.errors.every(err => err instanceof Reentrancy.TraceNotFoundError);
+			return false;
+		},
 		network(err) {
 			if (err instanceof Response)
 				return true;
@@ -102,15 +109,13 @@ async function evaluate(
 			log(chalk.red`Analysis Error: ${txn.attack.name}`);
 			console.error(err);
 			let errorMatched = false;
-			if (err instanceof Error) {
-				let key: keyof typeof errors;
-				for (key in errors) {
-					if (errors[key](err)) {
-						stats.errors[key] ??= 0;
-						++stats.errors[key];
-						errorMatched = true;
-						break;
-					}
+			let key: keyof typeof errors;
+			for (key in errors) {
+				if (errors[key](err)) {
+					stats.errors[key] ??= 0;
+					++stats.errors[key];
+					errorMatched = true;
+					break;
 				}
 			}
 			if (!errorMatched) {
@@ -141,7 +146,7 @@ async function evaluate(
 		for (const key in expected) {
 			if (actual[key] !== expected[key]) {
 				equal = false;
-				log(chalk.red`Expected ${key} to be ${expected[key]}, but got ${actual[key]}`);
+				log(chalk.yellow`Expected ${key} to be ${expected[key]}, but got ${actual[key]}`);
 				stats.mismatch[key] ??= 0;
 				++stats.mismatch[key];
 			}

@@ -107,7 +107,13 @@ export class QuickNode
 	}
 
 	async debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: QuickNode.Chain | number) {
-		const trace = await this.request<QuickNode.DebugTraceRaw | null>("debug_traceTransaction", [txHash, options], chain);
+		const trace = await this.request<QuickNode.DebugTraceRaw | [] | null>("debug_traceTransaction", [txHash, options], chain)
+			.then(r => r == null || Array.isArray(r) ? null : r)
+			.catch(err => {
+				if (err instanceof Response && err.status === 404)
+					return null;
+				throw err;
+			});
 		return trace ? verifyCallTypes(trace) : null;
 	}
 
