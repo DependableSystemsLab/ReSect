@@ -19,4 +19,15 @@ describe("Database", () => {
 		await source.initialize();
 		await source.synchronize(true);
 	});
+
+	test("Migration", async () => {
+		const source = new DataSource({
+			...typeormConfig,
+			synchronize: false,
+			logging: true
+		});
+		await source.initialize();
+		await source.runMigrations({ transaction: "all" });
+		await source.destroy();
+	});
 });
