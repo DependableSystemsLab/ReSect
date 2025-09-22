@@ -56,5 +56,7 @@ export const typeormConfig: PostgresConnectionOptions = {
 	synchronize: parseBool(synchronize),
 	logging: parseBool(logging),
 	namingStrategy: NamingStrategy.inst,
-	entities: [...entities]
+	entities: [...entities],
+	migrations: ["src/database/migrations/*.{js,ts}"],
+	migrationsTableName: "Migration"
 };
