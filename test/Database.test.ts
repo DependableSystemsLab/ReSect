@@ -1,12 +1,13 @@
 import "basic-type-extensions";
 import { DataSource, IsNull } from "typeorm";
 import inspector from "node:inspector";
-import { etherscanApiKey } from "../src/config/credentials";
+import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { typeormConfig } from "../src/config/typeorm";
 import { JsonRpcConverter } from "../src/converters";
-import { Block, Chain, Database, Transaction } from "../src/database";
-import { Etherscan } from "../src/providers";
+import { Block, Chain, Contract, Database, Transaction } from "../src/database";
+import { Etherscan, QuickNode, Tenderly, type RPC } from "../src/providers";
 import { Hex } from "../src/utils";
+import { Reentrancy } from "../src/Reentrancy";
 
 
 describe("Database", () => {
@@ -83,5 +84,103 @@ describe("Database", () => {
 
 		await blockRepo.save(blocks.filter(b => b != null));
 		await repo.save(txs);
-	}, 1000 * 60 * 60 * 24);
+	}, 24 * 60 * 60_000);
+
+	test("Fetch Contracts", async () => {
+		const database = new Database({
+			...typeormConfig,
+			logging: ["warn", "error"]
+		});
+		const repo = await database.getRepository(Contract);
+		const txnRepo = await database.getRepository(Transaction);
+		const blockRepo = await database.getRepository(Block);
+		const contracts = await repo.createQueryBuilder()
+			.where("octet_length(code) = 0")
+			.getMany();
+		const txns = await txnRepo.find({ select: { hash: true, chainId: true } });
+		const blocks = await blockRepo.find({ select: { number: true, chainId: true } });
+
+		const contractsByChain = new Map<number, Contract[]>();
+		for (const contract of contracts) {
+			const chainId = contract.chainId!;
+			let collection = contractsByChain.get(chainId);
+			if (!collection) {
+				collection = [];
+				contractsByChain.set(chainId, collection);
+			}
+			collection.push(contract);
+		}
+
+		const etherscan = new Etherscan(etherscanApiKey);
+		const rpcProvider: RPC.MultiChainProvider = quickNodeApiKey ? new QuickNode(quickNodeApiKey) : etherscan.geth;
+		const debugProvider = quickNodeApiKey ? new QuickNode(quickNodeApiKey) : new Tenderly(tenderlyNodeAccessKeys);
+		const errors = [];
+		for (const [chainId, contracts] of contractsByChain) {
+			console.log(`Found ${contracts.length} NULL or empty contracts for chain ${chainId}`);
+			const creations = await etherscan.getContractCreation(contracts.map(c => Hex.addPrefix(c.address)), chainId);
+			const existingTxns = new Set(txns.filter(t => t.chainId === chainId).map(t => t.hash));
+			const missingTxns = new Array<Hex.TxHash>();
+			const promises = new Array<Promise<void>>();
+			const entitiesToSave = new Array<Contract>();
+			for (let i = 0; i < contracts.length; ++i) {
+				const contract = contracts[i];
+				const creation = creations[i];
+				if (creation == undefined) {
+					contract.code = null;
+					contract.creationTxHash = null;
+					contract.creator = null;
+					contract.contractFactory = null;
+					entitiesToSave.push(contract);
+				}
+				else {
+					const address = Hex.addPrefix(contract.address);
+					const creationHash = creation.txHash as Hex.TxHash;
+					contract.creationTxHash = Hex.removePrefix(creationHash);
+					if (!existingTxns.has(contract.creationTxHash!))
+						missingTxns.push(creationHash);
+					contract.creator = Hex.removePrefix(creation.contractCreator);
+					contract.contractFactory = creation.contractFactory == "" ? null : Hex.removePrefix(creation.contractFactory);
+					promises.push(rpcProvider.getCode(address, "latest", chainId).then(async code => {
+						if (code === "0x") {
+							const trace = await debugProvider.getDebugTrace(creationHash, chainId);
+							if (trace === null)
+								throw new Error(`Failed to retrieve debug trace for ${creationHash}`);
+							const createTrace = Reentrancy.Analyzer.findCreateTrace(trace, address);
+							if (createTrace === undefined)
+								throw new Error(`Failed to find create trace for ${address}`);
+							code = createTrace.output ?? "0x";
+						}
+						contract.code = Buffer.from(Hex.removePrefix(code), "hex");
+						entitiesToSave.push(contract);
+					}));
+				}
+			}
+			for (const result of await Promise.allSettled(promises)) {
+				if (result.status === "rejected")
+					errors.push(result.reason);
+			}
+			if (entitiesToSave.length) {
+				if (missingTxns.length) {
+					const existingBlocks = new Set(blocks.filter(b => b.chainId === chainId).map(b => b.number));
+					for (const txHash of missingTxns) {
+						const txn = await rpcProvider.getTransactionByHash(txHash, chainId);
+						if (!txn)
+							throw new Error(`Failed to retrieve transaction for ${txHash}`);
+						if (!existingBlocks.has(Hex.toNumber(txn.blockNumber))) {
+							const block = await rpcProvider.getBlockByNumber(txn.blockNumber, false, chainId);
+							if (!block)
+								throw new Error(`Failed to retrieve block for ${txn.blockNumber}`);
+							await database.saveBlock(block as RPC.Block, chainId);
+							existingBlocks.add(Hex.toNumber(block.number));
+						}
+						await database.saveTransaction(txn!, chainId);
+					}
+				}
+				await repo.save(entitiesToSave, { chunk: 16 });
+				console.log(`Saved ${entitiesToSave.length} contracts for chain ${chainId}`);
+			}
+		}
+		if (errors.length > 0)
+			throw new AggregateError(errors);
+	}, 24 * 60 * 60_000);
 });
