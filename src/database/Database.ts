@@ -173,14 +173,9 @@ export class Database {
 		return await this.#batchSave(Transaction, entities);
 	}
 
-	async getAttackTransactions(
-		attackIds?: Arrayable<number>,
-		actions?: Arrayable<Transaction.Action>
-	): Promise<Transaction.WithAttack[]> {
+	async getAttackTransactions(attackIds?: Arrayable<number>, tags?: Transaction.Tags): Promise<Transaction.WithAttack[]> {
 		if (typeof attackIds === "number")
 			attackIds = [attackIds];
-		if (typeof actions === "string")
-			actions = [actions];
 		const manager = (await this.#source).manager;
 		let txns = await manager.find(Transaction, {
 			where: {
@@ -191,10 +186,8 @@ export class Database {
 				attack: true
 			}
 		});
-		if (actions?.length) {
-			const actionSet = new Set(actions);
-			txns = txns.filter(tx => tx.actions?.some(a => actionSet.has(a)));
-		}
+		if (tags !== undefined)
+			txns = txns.filter(tx => tx.hasTags(tags));
 
 		const chainIds = new Set(txns.map(tx => tx.chainId));
 		const chains = await manager.find(Chain, {

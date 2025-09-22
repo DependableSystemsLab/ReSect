@@ -9,14 +9,6 @@ import { CallTrace } from "./CallTrace";
 import { ReentrancyAttack } from "./ReentrancyAttack";
 import type { EntityOnlyRelations, EntityWithRelations, FullEntity, RelationKeys } from "./types";
 
-
-enum TransactionAction {
-	VulnerableContractDeployment = "VulnerableContractDeployment",
-	AttackContractDeployment = "AttackContractDeployment",
-	AttackPreparation = "AttackPreparation",
-	Exploit = "Exploit"
-}
-
 @Entity("Transaction")
 export class Transaction {
 	@PrimaryColumn("character", { length: 64 })
@@ -40,13 +32,8 @@ export class Transaction {
 	@Column("smallint", { name: "associated_attack", nullable: true })
 	attackId?: number | null;
 
-	@Column("enum", {
-		enum: TransactionAction,
-		enumName: "TransactionAction",
-		nullable: true,
-		array: true
-	})
-	actions?: Transaction.Action[] | null;
+	@Column("integer", { default: 0 })
+	tags?: Transaction.Tags;
 
 	@Type(() => Chain)
 	@ManyToOne(
@@ -102,11 +89,20 @@ export class Transaction {
 		if (txHash !== undefined)
 			this.hash = Hex.removePrefix(txHash);
 	}
+
+	hasTags(tag: Transaction.Tags): boolean {
+		return (this.tags ?? 0 & tag) === tag;
+	}
 }
 
 export namespace Transaction {
-	export const Action = TransactionAction;
-	export type Action = TransactionAction;
+	export enum Tags {
+		None = 0,
+		VulnerableContractDeployment = 1 << 0,
+		AttackContractDeployment = 1 << 1,
+		AttackPreparation = 1 << 2,
+		Exploit = 1 << 3
+	}
 
 	export const relations = Object.freeze(["chain", "block", "attack", "traces", "createdContracts"]) satisfies RelationKeys<Transaction>;
 	export type Relations = typeof relations[number];

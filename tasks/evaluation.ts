@@ -211,7 +211,7 @@ const cliParser = yargs()
 
 (async () => {
 	const argv = await cliParser.parseAsync(hideBin(process.argv));
-	const txns = await Database.default.getAttackTransactions(undefined, Transaction.Action.Exploit);
+	const txns = await Database.default.getAttackTransactions(undefined, Transaction.Tags.Exploit);
 	let collection: Transaction.WithAttack[];
 	if (argv.collection === "all")
 		collection = txns;
