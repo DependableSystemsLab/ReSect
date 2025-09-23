@@ -138,11 +138,13 @@ export class Etherscan {
 		return result;
 	}
 
-	getBlockNumberByTimestamp(timestamp?: number, closest: "before" | "after" = "before", chain?: number): Promise<number> {
+	async getBlockNumberByTimestamp(timestamp?: number, closest: "before" | "after" = "before", chain?: number): Promise<number | null> {
 		timestamp ??= Math.floor(Date.now() / 1000);
 		if (timestamp < 0)
 			throw new Error(`Invalid timestamp: ${timestamp}`);
-		return this.#request<number>("block", "getblocknobytime", chain, { timestamp, closest });
+		const result = await this.#request<number | string>("block", "getblocknobytime", chain, { timestamp, closest });
+		const blockNumber = typeof result === "number" ? result : Number.parseInt(result);
+		return Number.isNaN(blockNumber) ? null : blockNumber;
 	}
 
 	getTransactionsByAddress(
