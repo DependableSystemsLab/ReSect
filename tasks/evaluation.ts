@@ -1,6 +1,8 @@
 import chalk from "chalk";
+import cliProgress from "cli-progress";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import readline from "node:readline";
 import { Chain } from "../src/config/Chain";
 import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Database, ReentrancyAttack, Transaction } from "../src/database";
@@ -89,7 +91,7 @@ async function evaluate(
 	type: "fn" | "fp",
 	txns: readonly FnTx[] | readonly FpTx[],
 	useDatabase: boolean = true,
-	concurrancy: number = 1
+	concurrency: number = 1
 ) {
 	const database = Database.default;
 	const etherscan = new Etherscan(etherscanApiKey, Chain.Ethereum, useDatabase ? database : undefined);
@@ -100,8 +102,8 @@ async function evaluate(
 		: useDatabase
 			? new TenderlyWithDb(tenderlyNodeAccessKeys, undefined, etherscan.geth, database)
 			: new Tenderly(tenderlyNodeAccessKeys);
-	console.log(chalk.cyan`Running ${txns.length} tests...`);
-	const width = txns.length.toString().length;
+	const analyzer = new Reentrancy.Analyzer(etherscan, debugProvider);
+
 	const stats = {
 		detected: 0,
 		passed: 0,
@@ -109,15 +111,26 @@ async function evaluate(
 		positive: [] as Hex.TxHash[],
 		errors: { total: 0 } as Record<string, number>,
 	};
+	const bar = new cliProgress.SingleBar({
+		format: `{bar} {percentage}% | ETA: {eta_formatted} | {value}/{total} txs | {message}`,
+		fps: 5,
+		etaBuffer: Math.max(20, Math.floor(10 * Math.log10(txns.length))),
+		hideCursor: true,
+		autopadding: true,
+		clearOnComplete: true
+	}, cliProgress.Presets.shades_classic);
+	const log = (...args: any[]) => {
+		readline.clearLine(process.stdout, 0);
+		readline.cursorTo(process.stdout, 0);
+		console.log(...args);
+	};
 
-	const fnTest = async (txn: FnTx, index: number) => {
-		const idxStr = (index + 1).toString().padStart(width, " ");
-		const log = (msg: string) => console.log(`[${idxStr}/${txns.length}] ${msg}`);
-
-		log(chalk.cyan`Analyzing ${txn.attack.name} (0x${txn.hash} on ${txn.chain.name})`);
+	const fnTest = async (txn: FnTx) => {
 		const hash = `0x${txn.hash}` as const;
 		const attack = txn.attack!;
-		const analyzer = new Reentrancy.Analyzer(etherscan, debugProvider);
+
+		const txInfo = `${attack.name} (${hash} on ${txn.chain.name})`;
+		bar.update({ message: txInfo });
 
 		let detected = false;
 		let scope = Reentrancy.Scope.CrossContract;
@@ -134,14 +147,14 @@ async function evaluate(
 			}
 		}
 		catch (err) {
-			log(chalk.red`Analysis Error: ${txn.attack.name}`);
+			log(chalk.red`Analysis Error: ${txInfo}`);
 			console.error(err);
 			handleError(err, stats.errors);
 			return;
 		}
 
 		if (!detected) {
-			log(chalk.yellow`No attack detected for ${txn.attack.name}`);
+			log(chalk.yellow`No attack detected for ${txInfo}`);
 			return;
 		}
 		++stats.detected;
@@ -159,27 +172,24 @@ async function evaluate(
 		let equal = true;
 		for (const key in expected) {
 			if (actual[key] !== expected[key]) {
-				equal = false;
-				log(chalk.yellow`Expected ${key} to be ${expected[key]}, but got ${actual[key]}`);
+				if (equal) {
+					log(chalk.yellow`Mismatched analysis for ${txInfo}:`);
+					equal = false;
+				}
+				log(chalk.yellow`  Expected ${key} to be ${expected[key]}, but got ${actual[key]}`);
 				stats.mismatch[key] ??= 0;
 				++stats.mismatch[key];
 			}
 		}
 		if (!equal)
 			++stats.mismatch.total;
-		else {
-			log(chalk.green`Test passed: ${txn.attack.name}`);
+		else
 			++stats.passed;
-		}
 	};
 
-	const fpTest = async (txn: FpTx, index: number) => {
-		const idxStr = (index + 1).toString().padStart(width, " ");
-		const log = (msg: string) => console.log(`[${idxStr}/${txns.length}] ${msg}`);
-
+	const fpTest = async (txn: FpTx) => {
 		const hash = `0x${txn.hash}` as const;
-		const analyzer = new Reentrancy.Analyzer(etherscan, debugProvider);
-		log(chalk.cyan`Analyzing ${hash} (${txn.chain.name})`);
+		bar.update({ message: chalk.cyan`${hash} (${txn.chain.name})` });
 
 		let result: Reentrancy.AnalysisResult | undefined;
 		try {
@@ -188,6 +198,7 @@ async function evaluate(
 		}
 		catch (err) {
 			log(chalk.red`Analysis Error: ${hash}`);
+			console.error(err);
 			handleError(err, stats.errors);
 			return;
 		}
@@ -199,14 +210,29 @@ async function evaluate(
 		}
 	};
 
-	// @ts-expect-error
-	await txns.forEachAsync(type === "fn" ? fnTest : fpTest, txns, { maxConcurrency: concurrancy });
+	bar.start(txns.length, 0, { message: chalk.cyan`Running ${txns.length} tests...` });
+	await txns.forEachAsync(
+		type === "fn"
+			? txn => fnTest(txn as FnTx).finally(() => bar.increment())
+			: txn => fpTest(txn as FpTx).finally(() => bar.increment()),
+		txns,
+		{ maxConcurrency: concurrency }
+	);
+	await Promise.sleep(100); // wait for the last bar update to finish
+	bar.stop();
 
 	console.log(chalk.white`\nEvaluation Summary:`);
 	const logStats = (color: chalk.Chalk, label: string, count: number, total: number) =>
 		console.log(color`${label}: ${count}/${total} (${(count / total * 100).toFixed(2)}%)`);
-	if (type === "fp")
-		logStats(chalk.yellow, "Positives", stats.positive.length, txns.length - stats.errors.total);
+	if (type === "fp") {
+		const total = txns.length - stats.errors.total;
+		logStats(chalk.green, "Negatives", total - stats.positive.length, total);
+		if (stats.positive.length > 0) {
+			logStats(chalk.yellow, "Positives", stats.positive.length, total);
+			for (const hash of stats.positive)
+				console.log(chalk.yellow`  ${hash}`);
+		}
+	}
 	else {
 		logStats(chalk.cyan, `Detection`, stats.detected, txns.length - stats.errors.total);
 		logStats(chalk.green, `Analysis`, stats.passed, stats.detected);
