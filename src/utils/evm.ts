@@ -68,12 +68,12 @@ export function extractSelector(input: Hex): Hex.Selector | null | undefined;
 export function extractSelector(trace: { type: CallType, input: Hex; }): Hex.Selector | null | undefined;
 export function extractSelector(param: Hex | { type: CallType, input: Hex; }): Hex.Selector | null | undefined {
 	let { type, input: rawInput } = typeof param === "object" && "type" in param ? param : { input: param };
-	if (type?.includes("CALL") !== true) // CALL, STATICCALL, DELEGATECALL, CALLCODE
+	if (type?.includes("CALL") === false) // CALL, STATICCALL, DELEGATECALL, CALLCODE
 		return undefined;
 	const input = Hex.removePrefix(Hex.toString(rawInput));
-	if (input === "") // Fallback
-		return null;
+	// By convention, empty input indicates native token transfer.
+	// A input shorter than 4 bytes isn't common, but can possibly be used as a tag or arbitrary data for a contract that handles msg.data directly.
 	if (input.length < 8)
-		throw new TypeError(`Invalid input: ${input}`);
+		return null;
 	return `0x${input.slice(0, 8)}` as Hex.Selector;
 }
