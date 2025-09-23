@@ -1,5 +1,5 @@
-import { Promisable, type Arrayable } from "type-fest";
-import { DataSource, In, IsNull, Not, type DataSourceOptions, type EntityTarget, type ObjectLiteral, type Repository } from "typeorm";
+import { Promisable, type Arrayable, type SetRequired } from "type-fest";
+import { DataSource, In, IsNull, Not, Raw, type DataSourceOptions, type EntityTarget, type ObjectLiteral } from "typeorm";
 import { Block, CallTrace, Chain, Contract, Transaction } from "./entities";
 import { typeormConfig } from "../config/typeorm";
 import { EtherscanConverter, JsonRpcConverter, TraceConverter } from "../converters";
@@ -173,6 +173,17 @@ export class Database {
 		return await this.#batchSave(Transaction, entities);
 	}
 
+	async #setChains<T extends Transaction = Transaction>(txns: T[]): Promise<SetRequired<T, "chain">[]> {
+		const chainIds = new Set(txns.map(tx => tx.chainId));
+		const repo = await this.getRepository(Chain);
+		const chains = await repo.find({
+			where: { id: In(Array.from(chainIds)) }
+		});
+		const chainMap = new Map(chains.map(c => [c.id, c]));
+		txns.forEach(tx => tx.chain = chainMap.get(tx.chainId!));
+		return txns as SetRequired<T, "chain">[];
+	}
+
 	async getAttackTransactions(attackIds?: Arrayable<number>, tags?: Transaction.Tags): Promise<Transaction.WithAttack[]> {
 		if (typeof attackIds === "number")
 			attackIds = [attackIds];
@@ -188,15 +199,21 @@ export class Database {
 		});
 		if (tags !== undefined)
 			txns = txns.filter(tx => tx.hasTags(tags));
-
-		const chainIds = new Set(txns.map(tx => tx.chainId));
-		const chains = await manager.find(Chain, {
-			where: { id: In(Array.from(chainIds)) }
-		});
-		const chainMap = new Map(chains.map(c => [c.id, c]));
-		txns.forEach(tx => tx.chain = chainMap.get(tx.chainId!));
-
+		await this.#setChains(txns);
 		return txns as Transaction.WithAttack[];
+	}
+
+	async getFpEvaluationTransactions(chainId?: number, count?: number) {
+		const repo = await this.getRepository(Transaction);
+		const txns = await repo.find({
+			where: {
+				chainId,
+				tags: Raw(alias => `(${alias} & ${Transaction.Tags.RandomlySelected}) != 0`)
+			},
+			take: count,
+			order: { blockNumber: "ASC", blockIndex: "ASC" }
+		});
+		return await this.#setChains(txns);
 	}
 
 	async getDebugTrace(txHash: Hex.String): Promise<RPC.Debug.Trace | null> {

@@ -6,6 +6,7 @@ import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src
 import { Database, ReentrancyAttack, Transaction } from "../src/database";
 import { type DebugTraceProvider, Etherscan, QuickNode, QuickNodeWithDb, Tenderly, TenderlyWithDb } from "../src/providers";
 import { Reentrancy } from "../src/Reentrancy";
+import type { Hex } from "../src/utils";
 
 
 function convertEntranceType(ep: ReentrancyAttack.EntryPoint): Reentrancy.EntranceType {
@@ -38,8 +39,55 @@ function convertScope(scope: ReentrancyAttack.Scope): Reentrancy.Scope {
 	}
 }
 
+const errors = {
+	chainCompatibility(err) {
+		if (!(err instanceof Error))
+			return false;
+		const msg = err.message;
+		return msg.startsWith("Invalid chain ID:") || msg.startsWith("Invalid txhash:");
+	},
+	notFound(err) {
+		if (err instanceof Reentrancy.TraceNotFoundError)
+			return true;
+		if (err instanceof AggregateError)
+			return err.errors.every(err => err instanceof Reentrancy.TraceNotFoundError);
+		return false;
+	},
+	network(err) {
+		if (err instanceof Response)
+			return true;
+		if (!(err instanceof Error))
+			return false;
+		return err.message === "fetch failed" || err instanceof AggregateError && err.errors.every(err => err.message === "fetch failed");
+	},
+} satisfies Record<string, (err: any) => boolean>;
+
+function handleError(err: any, errStats: Record<string, number>) {
+	let errorMatched = false;
+	let key: keyof typeof errors;
+	for (key in errors) {
+		if (errors[key](err)) {
+			errStats[key] ??= 0;
+			++errStats[key];
+			errorMatched = true;
+			break;
+		}
+	}
+	if (!errorMatched) {
+		errStats.other ??= 0;
+		++errStats.other;
+	}
+	++errStats.total;
+}
+
+type FnTx = Pick<Transaction.WithAttack, "hash" | "chain" | "attack">;
+type FpTx = Pick<Transaction.WithRelations<"chain">, "hash" | "chain">;
+
+async function evaluate(type: "fn", txns: readonly FnTx[], useDatabase?: boolean, concurrancy?: number): Promise<void>;
+async function evaluate(type: "fp", txns: readonly FpTx[], useDatabase?: boolean, concurrancy?: number): Promise<void>;
 async function evaluate(
-	txns: readonly Pick<Transaction.WithAttack, "hash" | "chain" | "attack">[],
+	type: "fn" | "fp",
+	txns: readonly FnTx[] | readonly FpTx[],
 	useDatabase: boolean = true,
 	concurrancy: number = 1
 ) {
@@ -54,35 +102,15 @@ async function evaluate(
 			: new Tenderly(tenderlyNodeAccessKeys);
 	console.log(chalk.cyan`Running ${txns.length} tests...`);
 	const width = txns.length.toString().length;
-	const errors = {
-		chainCompatibility(err) {
-			if (!(err instanceof Error))
-				return false;
-			const msg = err.message;
-			return msg.startsWith("Invalid chain ID:") || msg.startsWith("Invalid txhash:");
-		},
-		notFound(err) {
-			if (err instanceof Reentrancy.TraceNotFoundError)
-				return true;
-			if (err instanceof AggregateError)
-				return err.errors.every(err => err instanceof Reentrancy.TraceNotFoundError);
-			return false;
-		},
-		network(err) {
-			if (err instanceof Response)
-				return true;
-			if (!(err instanceof Error))
-				return false;
-			return err.message === "fetch failed" || err instanceof AggregateError && err.errors.every(err => err.message === "fetch failed");
-		},
-	} satisfies Record<string, (err: any) => boolean>;
 	const stats = {
 		detected: 0,
 		passed: 0,
+		mismatch: { total: 0 } as Record<string, number>,
+		positive: [] as Hex.TxHash[],
 		errors: { total: 0 } as Record<string, number>,
-		mismatch: { total: 0 } as Record<string, number>
 	};
-	await txns.forEachAsync(async (txn, index) => {
+
+	const fnTest = async (txn: FnTx, index: number) => {
 		const idxStr = (index + 1).toString().padStart(width, " ");
 		const log = (msg: string) => console.log(`[${idxStr}/${txns.length}] ${msg}`);
 
@@ -108,21 +136,7 @@ async function evaluate(
 		catch (err) {
 			log(chalk.red`Analysis Error: ${txn.attack.name}`);
 			console.error(err);
-			let errorMatched = false;
-			let key: keyof typeof errors;
-			for (key in errors) {
-				if (errors[key](err)) {
-					stats.errors[key] ??= 0;
-					++stats.errors[key];
-					errorMatched = true;
-					break;
-				}
-			}
-			if (!errorMatched) {
-				stats.errors.other ??= 0;
-				++stats.errors.other;
-			}
-			++stats.errors.total;
+			handleError(err, stats.errors);
 			return;
 		}
 
@@ -157,22 +171,55 @@ async function evaluate(
 			log(chalk.green`Test passed: ${txn.attack.name}`);
 			++stats.passed;
 		}
-	}, txns, { maxConcurrency: concurrancy });
+	};
+
+	const fpTest = async (txn: FpTx, index: number) => {
+		const idxStr = (index + 1).toString().padStart(width, " ");
+		const log = (msg: string) => console.log(`[${idxStr}/${txns.length}] ${msg}`);
+
+		const hash = `0x${txn.hash}` as const;
+		const analyzer = new Reentrancy.Analyzer(etherscan, debugProvider);
+		log(chalk.cyan`Analyzing ${hash} (${txn.chain.name})`);
+
+		let result: Reentrancy.AnalysisResult | undefined;
+		try {
+			for await (result of analyzer.analyze(hash, txn.chain.id))
+				break;
+		}
+		catch (err) {
+			log(chalk.red`Analysis Error: ${hash}`);
+			handleError(err, stats.errors);
+			return;
+		}
+
+		if (result) {
+			stats.positive.push(hash);
+			log(chalk.yellow`Positive detected: ${hash}`);
+			console.log(result.toString());
+		}
+	};
+
+	// @ts-expect-error
+	await txns.forEachAsync(type === "fn" ? fnTest : fpTest, txns, { maxConcurrency: concurrancy });
 
 	console.log(chalk.white`\nEvaluation Summary:`);
 	const logStats = (color: chalk.Chalk, label: string, count: number, total: number) =>
 		console.log(color`${label}: ${count}/${total} (${(count / total * 100).toFixed(2)}%)`);
-	logStats(chalk.cyan, `Detection`, stats.detected, txns.length - stats.errors.total);
-	logStats(chalk.green, `Analysis`, stats.passed, stats.detected);
-	let keys = Object.keys(stats.mismatch);
-	if (keys.length > 1) {
-		logStats(chalk.yellow, `Mismatches`, stats.mismatch.total, stats.detected);
-		for (const key of keys) {
-			if (key !== "total")
-				logStats(chalk.yellow, `  ${key}`, stats.mismatch[key], stats.detected);
+	if (type === "fp")
+		logStats(chalk.yellow, "Positives", stats.positive.length, txns.length - stats.errors.total);
+	else {
+		logStats(chalk.cyan, `Detection`, stats.detected, txns.length - stats.errors.total);
+		logStats(chalk.green, `Analysis`, stats.passed, stats.detected);
+		const keys = Object.keys(stats.mismatch);
+		if (keys.length > 1) {
+			logStats(chalk.yellow, `Mismatches`, stats.mismatch.total, stats.detected);
+			for (const key of keys) {
+				if (key !== "total")
+					logStats(chalk.yellow, `  ${key}`, stats.mismatch[key], stats.detected);
+			}
 		}
 	}
-	keys = Object.keys(stats.errors);
+	const keys = Object.keys(stats.errors);
 	if (keys.length > 1) {
 		logStats(chalk.red, `Errors`, stats.errors.total, txns.length);
 		for (const key of keys) {
@@ -183,16 +230,36 @@ async function evaluate(
 }
 
 const cliParser = yargs()
-	.option("collection", {
+	.option("type", {
+		alias: "t",
+		type: "string",
+		choices: ["fn", "fp"] as const,
+		default: "fn" as const,
+		description: "Type of evaluation ('fn' for false negatives, 'fp' for false positives)"
+	})
+	.option("chain", {
 		alias: "c",
 		type: "string",
-		default: "first",
-		description: "Collection of transactions to evaluate ('first' or 'all')",
+		description: "Blockchain network. Can be either chain name or chain ID",
 		coerce(value: string) {
-			value = value.toLowerCase();
-			if (value !== "first" && value !== "all")
-				throw new Error("Invalid collection. Use 'first' or 'all'.");
-			return value;
+			if (/^\d+$/.test(value))
+				return Number.parseInt(value);
+			if (!(value in Chain))
+				throw new Error(`Unknown chain: ${value}`);
+			return Chain[value as keyof typeof Chain];
+		}
+	})
+	.option("size", {
+		type: "string",
+		default: "all",
+		description: "Number of transactions to evaluate. Use 'all' for all transactions, or 'first' in case of false negatives to use only the first transaction of each attack",
+		coerce(value: string) {
+			if (value === "all" || value === "first")
+				return value;
+			const n = Number.parseInt(value);
+			if (!Number.isSafeInteger(n))
+				throw new Error(`Invalid size: ${value}`);
+			return n;
 		}
 	})
 	.option("concurrency", {
@@ -210,21 +277,31 @@ const cliParser = yargs()
 	.alias("help", "h");
 
 (async () => {
-	const argv = await cliParser.parseAsync(hideBin(process.argv));
-	const txns = await Database.default.getAttackTransactions(undefined, Transaction.Tags.Exploit);
-	let collection: Transaction.WithAttack[];
-	if (argv.collection === "all")
-		collection = txns;
-	else {
-		const attackTxns = new Map<number, typeof txns[0]>();
-		for (const txn of txns) {
-			if (txn.attackId == null)
-				continue;
-			const existing = attackTxns.get(txn.attackId);
-			if (!existing || existing.timestamp == null || txn.timestamp && txn.timestamp < existing.timestamp)
-				attackTxns.set(txn.attackId, txn);
+	const { type, chain: chainId, size, ...argv } = await cliParser.parseAsync(hideBin(process.argv));
+	if (type === "fn") {
+		const txns = await Database.default.getAttackTransactions(undefined, Transaction.Tags.Exploit);
+		let collection: Transaction.WithAttack[];
+		if (size === "all")
+			collection = txns;
+		else {
+			const attackTxns = new Map<number, typeof txns[0]>();
+			for (const txn of txns) {
+				if (txn.attackId == null)
+					continue;
+				const existing = attackTxns.get(txn.attackId);
+				if (!existing || existing.timestamp == null || txn.timestamp && txn.timestamp < existing.timestamp)
+					attackTxns.set(txn.attackId, txn);
+			}
+			collection = Array.from(attackTxns.values());
 		}
-		collection = Array.from(attackTxns.values());
+		if (chainId !== undefined)
+			collection = collection.filter(tx => tx.chainId === chainId);
+		await evaluate("fn", collection, argv.database, argv.concurrency);
 	}
-	await evaluate(collection, argv.database, argv.concurrency);
+	else {
+		if (size === "first")
+			throw new Error(`Option --size=first is not valid for false positive evaluation`);
+		const collection = await Database.default.getFpEvaluationTransactions(chainId, size === "all" ? undefined : size);
+		await evaluate("fp", collection, argv.database, argv.concurrency);
+	}
 })();
