@@ -15,7 +15,7 @@ type FuncOutput<T extends string> = Omit<abi.ABIFunction, "name" | "selector" | 
 	inputs: SetRequired<Partial<abi.ABIInput>, "type">[];
 };
 
-export type NamedABI<T extends string> = Readonly<Record<T, FuncOutput<T>>>;
+export type NamedABI<T extends string = string> = Readonly<Record<T, FuncOutput<T>>>;
 
 function constructAbi<T extends string = string>(
 	funcs: readonly FuncInput<T>[]
@@ -69,9 +69,7 @@ export namespace ERC20 {
 		{
 			name: "totalSupply",
 			stateMutability: "view",
-			inputs: [
-				{ type: "address", name: "owner" }
-			],
+			inputs: [],
 			outputs: [
 				{ type: "uint256", name: "totalSupply" }
 			]
@@ -172,6 +170,94 @@ export namespace ERC677.Recipient {
 	export type FuncName = keyof typeof abis;
 }
 
+export namespace ERC721 {
+	export const abis = constructAbi([
+		{
+			name: "balanceOf",
+			inputs: [
+				{ type: "address", name: "owner" }
+			],
+			outputs: [
+				{ type: "uint256", name: "balance" }
+			]
+		},
+		{
+			name: "ownerOf",
+			inputs: [
+				{ type: "uint256", name: "tokenId" }
+			],
+			outputs: [
+				{ type: "address", name: "owner" }
+			]
+		},
+		{
+			name: "safeTransferFrom",
+			inputs: [
+				{ type: "address", name: "from" },
+				{ type: "address", name: "to" },
+				{ type: "uint256", name: "tokenId" },
+				{ type: "bytes", name: "data" }
+			],
+			outputs: []
+		},
+		{
+			name: "safeTransferFrom",
+			inputs: [
+				{ type: "address", name: "from" },
+				{ type: "address", name: "to" },
+				{ type: "uint256", name: "tokenId" }
+			],
+			outputs: []
+		},
+		{
+			name: "transferFrom",
+			inputs: [
+				{ type: "address", name: "from" },
+				{ type: "address", name: "to" },
+				{ type: "uint256", name: "tokenId" }
+			],
+			outputs: []
+		},
+		{
+			name: "approve",
+			inputs: [
+				{ type: "address", name: "approved" },
+				{ type: "uint256", name: "tokenId" }
+			],
+			outputs: []
+		},
+		{
+			name: "setApprovalForAll",
+			inputs: [
+				{ type: "address", name: "operator" },
+				{ type: "bool", name: "approved" }
+			],
+			outputs: []
+		},
+		{
+			name: "getApproved",
+			inputs: [
+				{ type: "uint256", name: "tokenId" }
+			],
+			outputs: [
+				{ type: "address", name: "operator" }
+			]
+		},
+		{
+			name: "isApprovedForAll",
+			inputs: [
+				{ type: "address", name: "owner" },
+				{ type: "address", name: "operator" }
+			],
+			outputs: [
+				{ type: "bool", name: "approved" }
+			]
+		}
+	]);
+
+	export type FuncName = keyof typeof abis;
+}
+
 export namespace ERC721.Recipient {
 	export const abis = constructAbi([
 		{
@@ -226,6 +312,73 @@ export namespace ERC777.Sender {
 				{ type: "bytes", name: "operatorData" }
 			],
 			outputs: []
+		}
+	]);
+
+	export type FuncName = keyof typeof abis;
+}
+
+export namespace ERC1155 {
+	export const abis = constructAbi([
+		{
+			name: "safeTransferFrom",
+			inputs: [
+				{ type: "address", name: "from" },
+				{ type: "address", name: "to" },
+				{ type: "uint256", name: "id" },
+				{ type: "uint256", name: "value" },
+				{ type: "bytes", name: "data" }
+			],
+			outputs: []
+		},
+		{
+			name: "safeBatchTransferFrom",
+			inputs: [
+				{ type: "address", name: "from" },
+				{ type: "address", name: "to" },
+				{ type: "uint256[]", name: "ids" },
+				{ type: "uint256[]", name: "values" },
+				{ type: "bytes", name: "data" }
+			],
+			outputs: []
+		},
+		{
+			name: "balanceOf",
+			inputs: [
+				{ type: "address", name: "owner" },
+				{ type: "uint256", name: "id" }
+			],
+			outputs: [
+				{ type: "uint256", name: "balance" }
+			]
+		},
+		{
+			name: "balanceOfBatch",
+			inputs: [
+				{ type: "address[]", name: "owners" },
+				{ type: "uint256[]", name: "ids" }
+			],
+			outputs: [
+				{ type: "uint256[]", name: "balances" }
+			]
+		},
+		{
+			name: "setApprovalForAll",
+			inputs: [
+				{ type: "address", name: "operator" },
+				{ type: "bool", name: "approved" }
+			],
+			outputs: []
+		},
+		{
+			name: "isApprovedForAll",
+			inputs: [
+				{ type: "address", name: "owner" },
+				{ type: "address", name: "operator" }
+			],
+			outputs: [
+				{ type: "bool", name: "approved" }
+			]
 		}
 	]);
 
