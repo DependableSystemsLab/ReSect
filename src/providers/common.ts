@@ -88,8 +88,8 @@ export namespace RPC {
 		from: Hex.Address;
 		gas: Hex.String;
 		gasPrice: Hex.String;
-		maxFeePerGas: Hex.String;
-		maxPriorityFeePerGas: Hex.String;
+		maxFeePerGas?: Hex.String;
+		maxPriorityFeePerGas?: Hex.String;
 		hash: Hex.TxHash;
 		input: Hex.String;
 		nonce: Hex.String;
@@ -97,7 +97,10 @@ export namespace RPC {
 		transactionIndex: Hex.String;
 		value: Hex.String;
 		type: Hex.String;
-		accessList: Hex.String[];
+		accessList?: {
+			address: Hex.Address;
+			storageKeys: Hex.String[];
+		}[];
 		v: Hex.String;
 		r: Hex.String;
 		s: Hex.String;
