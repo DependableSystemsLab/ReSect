@@ -64,10 +64,13 @@ export function verifyCallTypes<T extends TypeUnverifiedDebugTrace>(debugTrace: 
  * or `null` if the input is empty,
  * or `undefined` if the trace type is not a call type.
  */
-export function extractSelector(trace: { type: CallType, input: Hex; }): Hex.Selector | null | undefined {
-	if (!trace.type.includes("CALL")) // CALL, STATICCALL, DELEGATECALL, CALLCODE
+export function extractSelector(input: Hex): Hex.Selector | null | undefined;
+export function extractSelector(trace: { type: CallType, input: Hex; }): Hex.Selector | null | undefined;
+export function extractSelector(param: Hex | { type: CallType, input: Hex; }): Hex.Selector | null | undefined {
+	let { type, input: rawInput } = typeof param === "object" && "type" in param ? param : { input: param };
+	if (type?.includes("CALL") !== true) // CALL, STATICCALL, DELEGATECALL, CALLCODE
 		return undefined;
-	const input = Hex.removePrefix(Hex.toString(trace.input));
+	const input = Hex.removePrefix(Hex.toString(rawInput));
 	if (input === "") // Fallback
 		return null;
 	if (input.length < 8)

@@ -101,7 +101,8 @@ export namespace Transaction {
 		VulnerableContractDeployment = 1 << 0,
 		AttackContractDeployment = 1 << 1,
 		AttackPreparation = 1 << 2,
-		Exploit = 1 << 3
+		Exploit = 1 << 3,
+		RandomlySelected = 1 << 4
 	}
 
 	export const relations = Object.freeze(["chain", "block", "attack", "traces", "createdContracts"]) satisfies RelationKeys<Transaction>;

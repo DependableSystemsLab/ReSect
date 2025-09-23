@@ -8,7 +8,8 @@
 		"test": "jest",
 		"evaluate:first": "dotenvx run -- tsx tasks/evaluation.ts --collection=first",
 		"evaluate:all": "dotenvx run -- tsx tasks/evaluation.ts --collection=all",
-		"fix-database": "dotenvx run -- tsx tasks/database-fix.ts"
+		"fix-database": "dotenvx run -- tsx tasks/database-fix.ts",
+		"create-fp-dataset": "dotenvx run -- tsx tasks/fp-dataset-creation.ts"
 	},
 	"author": "Yuqi Liu",
 	"license": "MIT",

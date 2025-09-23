@@ -3,7 +3,7 @@ import { RPC } from "../providers";
 import { Hex } from "../utils";
 
 export namespace JsonRpcConverter {
-	export function blockToEntity(block: RPC.Block, chainId: number): Block {
+	export function blockToEntity(block: RPC.Block<any>, chainId: number): Block {
 		const entity = new Block(Hex.toNumber(block.number), chainId);
 		entity.hash = Hex.removePrefix(block.hash);
 		entity.parentHash = Hex.removePrefix(block.parentHash);
