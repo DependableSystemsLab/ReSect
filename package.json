@@ -19,6 +19,7 @@
 		"basic-type-extensions": "^4.4.0",
 		"chalk": "^4.1.2",
 		"class-transformer": "^0.5.1",
+		"cli-progress": "^3.12.0",
 		"date-fns": "^4.1.0",
 		"fetch-throttler": "^1.2.2",
 		"js-sha3": "^0.9.3",
@@ -27,6 +28,7 @@
 		"typeorm": "^0.3.22"
 	},
 	"devDependencies": {
+		"@types/cli-progress": "^3.11.6",
 		"@types/jest": "^29.5.14",
 		"@types/node": "^22.15.11",
 		"@types/pg": "^8.15.1",

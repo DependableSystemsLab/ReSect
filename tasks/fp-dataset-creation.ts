@@ -1,4 +1,7 @@
 import "basic-type-extensions";
+import cliProgress from "cli-progress";
+import { formatDistanceToNow } from "date-fns/formatDistanceToNow";
+import { Raw } from "typeorm";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { Chain as ChainList } from "../src/config/Chain";
@@ -29,7 +32,8 @@ const database = new Database({
 
 async function fetchTransactions(
 	chainId: number,
-	blockNumbers: number[],
+	total: number,
+	blockRange: [start: number, end: number],
 	provider: "Etherscan" | "QuickNode" = "Etherscan"
 ) {
 	if (provider === "QuickNode" && !quickNodeApiKey)
@@ -49,42 +53,69 @@ async function fetchTransactions(
 			: new QuickNode(quickNodeApiKey!, chainId)
 	);
 
-	const digits = Math.floor(Math.log10(blockNumbers.length)) + 1;
-	const bnDigits = Math.floor(Math.log10(blockNumbers.maximum())) + 1;
 	const existingNumbers = new Set((await blockRepo.find({
 		select: ["number"],
 		where: { chainId }
 	})).map(b => b.number));
+	const existingTxCount = await txRepo.countBy({
+		chainId,
+		tags: Raw(alias => `(${alias} & ${Transaction.Tags.RandomlySelected}) != 0`)
+	});
+	if (existingTxCount >= total) {
+		console.log(`Already have ${existingTxCount} transactions in database, which meets or exceeds the requested total of ${total}.`);
+		return;
+	}
 
-	for (let i = 0; i < blockNumbers.length; ++i) {
-		const blockNumber = blockNumbers[i];
-		const logPrefix = `[${(i + 1).toString().padStart(digits, " ")}/${blockNumbers.length}] ${blockNumber.toString().padStart(bnDigits, " ")}: `;
-		const log = (message: string, ...args: any[]) => console.log(logPrefix + message, ...args);
+	const bar = new cliProgress.SingleBar({
+		format: `{bar} {percentage}% | ETA: {eta_formatted} | {value}/{total} txs | {message}`,
+		fps: 5,
+		etaBuffer: 20,
+		hideCursor: true,
+		autopadding: true
+	}, cliProgress.Presets.shades_classic);
 
-		if (existingNumbers.has(blockNumber)) {
-			log("Already in database, skipping");
-			continue;
+	let count = existingTxCount;
+	bar.start(total, count, { message: "Starting..." });
+	const startTime = Date.now();
+
+	try {
+		while (count < total) {
+			const blockNumber = Math.randomInteger(blockRange[0], blockRange[1]);
+			if (existingNumbers.has(blockNumber))
+				continue;
+
+			const block = await rpcProvider.getBlockByNumber(blockNumber, true, chainId);
+			if (block == null)
+				continue;
+
+			const blockEntity = JsonRpcConverter.blockToEntity(block, chainId);
+			await blockRepo.save(blockEntity);
+			const txEntities = new Array<Transaction>();
+			for (const tx of block.transactions) {
+				if (tx.from === tx.to)
+					continue; // Skip self-calls
+				const selector = extractSelector(tx.input);
+				if (selector == undefined)
+					continue; // Skip native tokens transfers
+				if (commonTokenSelectors.has(selector))
+					continue; // Skip common token interactions
+				const txEntity = JsonRpcConverter.transactionToEntity(tx, chainId);
+				txEntity.tags = Transaction.Tags.RandomlySelected;
+				txEntities.push(txEntity);
+				if (count + txEntities.length >= total)
+					break;
+			}
+			await txRepo.save(txEntities);
+
+			count += txEntities.length;
+			existingNumbers.add(blockNumber);
+			const nonTrivialPercent = block.transactions.length === 0 ? 0 : (txEntities.length / block.transactions.length * 100).toFixed(0);
+			bar.update(count, { message: `${blockNumber}: ${txEntities.length} / ${block.transactions.length} (${nonTrivialPercent}%) non-trivial` });
 		}
-		const block = await rpcProvider.getBlockByNumber(blockNumber, true, chainId);
-		if (block == null) {
-			log(`Not found on chain ${chain.name} (${chainId})`);
-			continue;
-		}
-		const blockEntity = JsonRpcConverter.blockToEntity(block, chainId);
-		await blockRepo.save(blockEntity);
-		const txEntities = new Array<Transaction>();
-		for (const tx of block.transactions) {
-			const selector = extractSelector(tx.input);
-			if (selector == undefined)
-				continue; // Skip native tokens transfers
-			if (commonTokenSelectors.has(selector))
-				continue; // Skip common token interactions
-			const txEntity = JsonRpcConverter.transactionToEntity(tx, chainId);
-			txEntity.tags = Transaction.Tags.RandomlySelected;
-			txEntities.push(txEntity);
-		}
-		log(`Fetched ${block.transactions.length} transactions, ${txEntities.length} non-trivial`);
-		await txRepo.save(txEntities);
+	}
+	finally {
+		bar.stop();
+		console.log(`Fetched ${count - existingTxCount} transactions in ${formatDistanceToNow(startTime)}`);
 	}
 }
 
@@ -135,9 +166,9 @@ const cliParser = yargs()
 		if (isNaN(date))
 			throw new Error(`Invalid date: ${value}`);
 		const block = await etherscan.getBlockNumberByTimestamp(Math.floor(date / 1000), type === "start" ? "after" : "before");
-		if (block === null)
+		if (block === null && type === "end")
 			throw new Error(`No block found for date: ${value}`);
-		return block;
+		return block ?? 0;
 	}
 
 	const startBlock = await parseRange("start", argv.start);
@@ -147,10 +178,6 @@ const cliParser = yargs()
 	if (argv.total > endBlock - startBlock + 1)
 		throw new Error(`Total (${argv.total}) is greater than available blocks (${endBlock - startBlock + 1})`);
 
-	// Randomly select total block numbers in the range [startBlock, endBlock]
-	const blockNumbers = new Set<number>();
-	while (blockNumbers.size < argv.total)
-		blockNumbers.add(Math.randomInteger(startBlock, endBlock));
-	await fetchTransactions(argv.chain, Array.from(blockNumbers).sort((a, b) => a - b), argv.provider);
+	await fetchTransactions(argv.chain, argv.total, [startBlock, endBlock], argv.provider);
 	await database.close();
 })();
