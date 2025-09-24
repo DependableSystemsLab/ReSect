@@ -180,19 +180,24 @@ export class Etherscan {
 				return addresses.map(a => results.get(a)!);
 			contractAddresses = addresses.filter(c => !results.has(c));
 		}
-		if (contractAddresses.length <= 5) {
-			await this.#request<Etherscan.ContractCreation[] | null>("contract", "getcontractcreation", chain, { contractAddresses }, false)
-				.then(rs => rs?.forEach(c => results.set(c.contractAddress, c)));
-		}
+
+		const request = async (contractAddresses: Hex.String[]) => {
+			const creations = await this.#request<Etherscan.ContractCreation[] | null>("contract", "getcontractcreation", chain, { contractAddresses }, false);
+			creations?.forEach(c => results.set(c.contractAddress, c));
+			for (const addr of contractAddresses as Hex.Address[]) {
+				if (!results.has(addr))
+					results.set(addr, null);
+			}
+		};
+		if (contractAddresses.length <= 5)
+			await request(contractAddresses);
 		else {
-			const slices = new Array(Math.ceil(contractAddresses.length / 5));
+			const slices = new Array<Hex.String[]>(Math.ceil(contractAddresses.length / 5));
 			for (let i = 0; i < contractAddresses.length; i += 5)
 				slices[i / 5] = contractAddresses.slice(i, i + 5);
-			await slices.forEachAsync(slice =>
-				this.#request<Etherscan.ContractCreation[] | null>("contract", "getcontractcreation", chain, { contractAddresses: slice }, false)
-					.then(rs => rs?.forEach(c => results.set(c.contractAddress, c)))
-			);
+			await slices.forEachAsync(request);
 		}
+
 		if (this.#db) {
 			const eoas = (contractAddresses as Hex.Address[]).filter(c => results.get(c) === null);
 			const newCreations = contractAddresses.map(c => results.get(c as Hex.Address)).filter(c => c != undefined);
