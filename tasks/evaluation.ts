@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import cliProgress from "cli-progress";
+import { QueryFailedError } from "typeorm";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import readline from "node:readline";
@@ -10,6 +11,8 @@ import { type DebugTraceProvider, Etherscan, QuickNode, QuickNodeWithDb, Tenderl
 import { Reentrancy } from "../src/Reentrancy";
 import type { Hex } from "../src/utils";
 
+
+type Promisable<T> = T | Promise<T>;
 
 function convertEntranceType(ep: ReentrancyAttack.EntryPoint): Reentrancy.EntranceType {
 	switch (ep) {
@@ -41,7 +44,7 @@ function convertScope(scope: ReentrancyAttack.Scope): Reentrancy.Scope {
 	}
 }
 
-const errors = {
+const errorCheckers: Record<string, (err: any) => boolean | Promisable<string | Error>> = {
 	chainCompatibility(err) {
 		if (!(err instanceof Error))
 			return false;
@@ -49,37 +52,67 @@ const errors = {
 		return msg.startsWith("Invalid chain ID:") || msg.startsWith("Invalid txhash:");
 	},
 	notFound(err) {
-		if (err instanceof Reentrancy.TraceNotFoundError)
-			return true;
-		if (err instanceof AggregateError)
-			return err.errors.every(err => err instanceof Reentrancy.TraceNotFoundError);
-		return false;
+		return err instanceof Reentrancy.TraceNotFoundError;
 	},
 	network(err) {
 		if (err instanceof Response)
-			return true;
+			return err.bodyUsed ? true : err.clone().text().then(text => `${err.status}: ${text}`);
 		if (!(err instanceof Error))
 			return false;
-		return err.message === "fetch failed" || err instanceof AggregateError && err.errors.every(err => err.message === "fetch failed");
+		return err.message === "fetch failed";
 	},
-} satisfies Record<string, (err: any) => boolean>;
+	database(err) {
+		return err instanceof QueryFailedError;
+	}
+};
 
-function handleError(err: any, errStats: Record<string, number>) {
-	let errorMatched = false;
-	let key: keyof typeof errors;
-	for (key in errors) {
-		if (errors[key](err)) {
-			errStats[key] ??= 0;
-			++errStats[key];
-			errorMatched = true;
+function* flattenError(err: any): Generator<any> {
+	if (!(err instanceof AggregateError))
+		yield err;
+	else {
+		for (const inner of err.errors)
+			yield* flattenError(inner);
+	}
+}
+
+async function handleError(error: any, stats: Record<string, number>) {
+	let matched = false;
+	let key: keyof typeof errorCheckers;
+	let message = error;
+	for (key in errorCheckers) {
+		const func = errorCheckers[key];
+		let match = true;
+		const errors = Array.from(flattenError(error));
+		const results = new Array<ReturnType<typeof func>>();
+		for (const e of errors) {
+			const r = func(e);
+			if (r === false) {
+				match = false;
+				break;
+			}
+			results.push(r);
+		}
+		if (match) {
+			stats[key] ??= 0;
+			++stats[key];
+			matched = true;
+			const messages = [];
+			for (let i = 0; i < results.length; ++i) {
+				let result = results[i];
+				if (result instanceof Promise)
+					result = await result;
+				messages.push(typeof result === "boolean" ? errors[i] : result);
+			}
+			message = messages.length === 1 ? messages[0] : messages;
 			break;
 		}
 	}
-	if (!errorMatched) {
-		errStats.other ??= 0;
-		++errStats.other;
+	if (!matched) {
+		stats.other ??= 0;
+		++stats.other;
 	}
-	++errStats.total;
+	++stats.total;
+	console.log(message);
 }
 
 type FnTx = Pick<Transaction.WithAttack, "hash" | "chain" | "attack">;
@@ -148,8 +181,7 @@ async function evaluate(
 		}
 		catch (err) {
 			log(chalk.red`Analysis Error: ${txInfo}`);
-			console.error(err);
-			handleError(err, stats.errors);
+			await handleError(err, stats.errors);
 			return;
 		}
 
@@ -198,8 +230,7 @@ async function evaluate(
 		}
 		catch (err) {
 			log(chalk.red`Analysis Error: ${hash}`);
-			console.error(err);
-			handleError(err, stats.errors);
+			await handleError(err, stats.errors);
 			return;
 		}
 
