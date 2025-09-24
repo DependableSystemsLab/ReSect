@@ -1,190 +1,16 @@
 import "basic-type-extensions";
+import { abiFromBytecode } from "@shazow/whatsabi";
 import chalk from "chalk";
-import { format as formatDate } from "date-fns";
-import { Etherscan, type RPC, type DebugTraceProvider } from "./providers";
-import { CallType, Counter, Hex, extractSelector, type DebugTrace, type MinimalTrace, type ReverseDebugTrace } from "./utils";
-import { abiFromBytecode, type abi } from "@shazow/whatsabi";
-import { checkTrace, ERC1155, ERC1363, ERC20, ERC223, ERC677, ERC721, ERC777 } from "./config/ERC";
+import { checkTrace, ERC1155, ERC1363, ERC20, ERC223, ERC677, ERC721, ERC777 } from "../config/ERC";
+import { type DebugTraceProvider, Etherscan, type RPC } from "../providers";
+import { CallType, type DebugTrace, extractSelector, Hex, type MinimalTrace, type ReverseDebugTrace } from "../utils";
+import { addressToString, entranceToString, hasLabel, inSameGroup, setLabel, toTraceList } from "./functions";
+import { Traverser } from "./Traverser";
+import type { AddressInfo, AnnotatedTrace, AnnotatedTraceInfo, ContractInfo, Entrance, EOAInfo } from "./types";
+import { EntranceType, Label, Scope, TraceNotFoundError } from "./types";
+
 
 export namespace Reentrancy {
-	interface ContractInfo {
-		address: Hex.Address;
-		isContract: true;
-		code: Hex.String;
-		creationBlock: number;
-		creationTxHash: Hex.TxHash;
-		creationTimestamp: number;
-		creator: Hex.Address;
-		contractFactory?: Hex.Address;
-		author: Hex.Address | "GENESIS";
-		abi: abi.ABI;
-	}
-
-	interface EOAInfo {
-		address: Hex.Address;
-		isContract: false;
-	}
-
-	type AddressInfo = ContractInfo | EOAInfo;
-
-	function addressToString(addr: AddressInfo): string {
-		if (!addr.isContract)
-			return chalk`{grey [EOA]} {cyanBright ${addr.address}}`;
-		const timestamp = formatDate(addr.creationTimestamp * 1000, "yyyy-MM-dd HH:mm:ss");
-		return chalk`{grey [Contract]} {cyanBright ${addr.address}} <- {blue ${addr.creator}} ({magentaBright ${timestamp}})`;
-	}
-
-	function inSameGroup(addrA: AddressInfo, addrB: AddressInfo): boolean {
-		const creatorA = addrA.isContract ? addrA.author : addrA.address;
-		const creatorB = addrB.isContract ? addrB.author : addrB.address;
-		return creatorA === creatorB;
-	}
-
-	class Traverser<T extends MinimalTrace = MinimalTrace> {
-		private readonly beforeCount = new Counter<AddressInfo>();
-		private readonly afterCount = new Counter<AddressInfo>();
-		private readonly currentStack: number[] = [];
-		private sender!: EOAInfo;
-
-		constructor(public readonly infos: Map<string, AddressInfo>) { }
-
-		*#traverse(trace: DebugTrace<T>, senderContractDepth: number): Generator<number[]> {
-			const to = this.infos.get(trace.to)!;
-			if (!to.isContract)
-				return;
-			const from = this.infos.get(trace.from)!;
-			const fromIsSender = inSameGroup(from, this.sender);
-			// STATICCALL from sender-controlled contract is always benign
-			if (fromIsSender && trace.type === CallType.STATICCALL)
-				return;
-
-			const reentrancyDetected = senderContractDepth !== -1
-				&& this.beforeCount.enumerate().some(([addr, count]) => count > 0 && inSameGroup(addr, to));
-			if (!(trace.calls?.length)) {
-				if (reentrancyDetected)
-					yield this.currentStack.slice();
-				return;
-			}
-
-			// Found sender contract
-			const toIsSender = inSameGroup(to, this.sender);
-			const found = !fromIsSender && toIsSender;
-			const newSenderContractDepth = found ? this.currentStack.length : senderContractDepth;
-
-			let before: (() => void) | undefined;
-			let after: (() => void) | undefined;
-			if (!toIsSender) {
-				const counter = senderContractDepth !== -1 ? this.afterCount : this.beforeCount;
-				before = () => counter.increment(to);
-				after = () => counter.decrement(to);
-			}
-			else if (found && senderContractDepth !== -1) {
-				const clone = this.afterCount.clone();
-				before = () => {
-					this.beforeCount.add(clone);
-					this.afterCount.clear();
-				};
-				after = () => {
-					this.beforeCount.minus(clone);
-					this.afterCount.add(clone);
-				};
-			}
-
-			before?.();
-			let reentrancyDetectedInCalls = false;
-			for (let i = 0; i < trace.calls.length; i++) {
-				this.currentStack.push(i);
-				for (const result of this.#traverse(trace.calls[i], newSenderContractDepth)) {
-					reentrancyDetectedInCalls = true;
-					yield result;
-				}
-				this.currentStack.pop();
-			}
-			after?.();
-
-			if (!reentrancyDetectedInCalls && reentrancyDetected)
-				yield this.currentStack.slice();
-		}
-
-		#clear() {
-			this.beforeCount.clear();
-			this.afterCount.clear();
-			this.currentStack.length = 0;
-			this.sender = undefined!;
-		}
-
-		*traverse(callTrace: DebugTrace<T>): Generator<number[]> {
-			this.#clear();
-			this.sender = this.infos.get(callTrace.from)! as EOAInfo;
-			yield* this.#traverse(callTrace, -1);
-		}
-	}
-
-	function toTraceList<T extends DebugTrace = DebugTrace>(trace: T, indices: number[]): T[] {
-		const result = new Array<T>(indices.length + 1);
-		result[0] = trace;
-		let current = trace;
-		for (let i = 0; i < indices.length; i++) {
-			const index = indices[i];
-			if (!(current.calls?.length) || index < 0 || index >= current.calls.length)
-				throw new Error(`Invalid index ${index} for call trace`);
-			const next = current.calls[index];
-			current = result[i + 1] = next as T;
-		}
-		return result;
-	}
-
-	export enum Scope {
-		SingleFunction,
-		CrossFunction,
-		CrossContract
-	}
-
-	export enum EntranceType {
-		Fallback,
-		MaliciousToken,
-		ERCHook,
-		Other
-	}
-
-	export enum Label {
-		None = 0,
-		VictimOut = 1 << 0,
-		AttackerIn = 1 << 1,
-		AttackerOut = 1 << 2,
-		VictimIn = 1 << 3
-	}
-
-	interface AnnotatedTraceInfo extends MinimalTrace {
-		index: number;
-		selector?: Hex.Selector | null;
-		label?: Label;
-	}
-
-	export type AnnotatedTrace = DebugTrace<AnnotatedTraceInfo>;
-
-	export interface Entrance {
-		type: EntranceType;
-		trace: AnnotatedTraceInfo;
-	}
-
-	function entranceToString({ type, trace }: Entrance): string {
-		let str = chalk`{red [${EntranceType[type]}]} {inverse ${trace.type}}: {cyanBright ${trace.from}} -> {cyanBright ${trace.to}}`;
-		const selector = extractSelector(trace);
-		if (selector !== undefined)
-			str += chalk` ({yellowBright ${selector ?? "fallback"}})`;
-		return str;
-	}
-
-	function hasLabel(trace: AnnotatedTrace, label: Label): boolean {
-		if (trace.label === undefined)
-			return false;
-		return (trace.label & label) !== 0;
-	}
-	function setLabel(trace: AnnotatedTrace, label: Label) {
-		trace.label = (trace.label ?? Label.None) | label;
-	}
-
 	export class AnalysisResult {
 		readonly!: boolean;
 		scope!: Scope;
@@ -220,12 +46,6 @@ export namespace Reentrancy {
 				str += `\t${entranceToString(entrance)}\n`;
 			str += "\n";
 			return str;
-		}
-	}
-
-	export class TraceNotFoundError extends Error {
-		constructor(public readonly txHash: Hex.TxHash, message?: string) {
-			super(message ?? `Debug trace for transaction ${txHash} not found`);
 		}
 	}
 
