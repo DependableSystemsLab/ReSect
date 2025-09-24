@@ -9,6 +9,7 @@ import { addressToString, hasLabel, inSameGroup, setLabel, toTraceList } from ".
 import { Traverser } from "./Traverser";
 import type { AddressInfo, AnnotatedTrace, AnnotatedTraceInfo, ContractInfo, Entrance, EOAInfo } from "./types";
 import { Label, Scope, TraceNotFoundError } from "./types";
+import { nonReentrant } from "./ReentrancyGuard";
 
 
 export class AnalysisResult {
@@ -389,6 +390,7 @@ export class Analyzer {
 		this.#debugTraces.clear();
 	}
 
+	@nonReentrant()
 	async *analyze(txHash: Hex.String, chain: number): AsyncGenerator<AnalysisResult> {
 		// Fetch debug trace
 		const txn = Hex.verifyTxHash(txHash);

@@ -142,9 +142,8 @@ async function evaluate(
 		console.log(...args);
 	};
 
-	const analyzer = new Analyzer(etherscan, debugProvider);
-
 	const fnTest = async (txn: FnTx) => {
+		const analyzer = new Analyzer(etherscan, debugProvider);
 		const hash = `0x${txn.hash}` as const;
 		const attack = txn.attack!;
 
@@ -206,6 +205,7 @@ async function evaluate(
 	};
 
 	const fpTest = async (txn: FpTx) => {
+		const analyzer = new Analyzer(etherscan, debugProvider);
 		const hash = `0x${txn.hash}` as const;
 		bar.update({ message: chalk.cyan`${hash} (${txn.chain.name})` });
 
