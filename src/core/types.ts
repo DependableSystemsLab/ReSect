@@ -1,6 +1,7 @@
 import "basic-type-extensions";
 import { Hex, type DebugTrace, type MinimalTrace } from "../utils";
 import { type abi } from "@shazow/whatsabi";
+import type { ReentrancyAttack } from "../database";
 
 
 export interface ContractInfo {
@@ -29,13 +30,6 @@ export enum Scope {
 	CrossContract
 }
 
-export enum EntranceType {
-	Fallback,
-	MaliciousToken,
-	ERCHook,
-	Other
-}
-
 export enum Label {
 	None = 0,
 	VictimOut = 1 << 0,
@@ -53,7 +47,7 @@ export interface AnnotatedTraceInfo extends MinimalTrace {
 export type AnnotatedTrace = DebugTrace<AnnotatedTraceInfo>;
 
 export interface Entrance {
-	type: EntranceType;
+	type: ReentrancyAttack.EntryPoint;
 	trace: AnnotatedTraceInfo;
 }
 

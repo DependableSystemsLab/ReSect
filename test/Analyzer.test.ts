@@ -1,9 +1,9 @@
 import inspector from "node:inspector";
 import { Chain, type ChainName } from "../src/config/Chain";
 import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
-import { Database } from "../src/database";
+import { Database, ReentrancyAttack } from "../src/database";
 import { Etherscan, QuickNode, QuickNodeWithDb, Tenderly, TenderlyWithDb, type DebugTraceProvider } from "../src/providers";
-import { Reentrancy } from "../src/Reentrancy";
+import { Analyzer, Scope } from "../src/core";
 import type { Hex } from "../src/utils";
 
 interface TestCaseBase {
@@ -15,8 +15,8 @@ interface TestCaseBase {
 
 interface PositiveTestCase extends TestCaseBase {
 	isReentrancy: true;
-	scope?: Reentrancy.Scope;
-	entranceType?: Reentrancy.EntranceType;
+	scope?: Scope;
+	entranceType?: ReentrancyAttack.EntryPoint;
 	readonly?: boolean;
 }
 
@@ -45,12 +45,12 @@ describe("Reentrancy Analyzer", () => {
 		const { chain, txHash } = testCase;
 		const chainId = Chain[chain];
 		const analyzer = testCase.useDatabase === false
-			? new Reentrancy.Analyzer(etherscan, debugProvider)
-			: new Reentrancy.Analyzer(etherscanWithDb, debugProviderWithDb);
+			? new Analyzer(etherscan, debugProvider)
+			: new Analyzer(etherscanWithDb, debugProviderWithDb);
 		let detected = false;
-		let scope = Reentrancy.Scope.CrossContract;
+		let scope = Scope.CrossContract;
 		let readonly = false;
-		const entranceTypes = new Set<Reentrancy.EntranceType>();
+		const entranceTypes = new Set<ReentrancyAttack.EntryPoint>();
 		for await (const result of analyzer.analyze(txHash, chainId)) {
 			detected = true;
 			if (!testCase.isReentrancy)
@@ -80,8 +80,8 @@ describe("Reentrancy Analyzer", () => {
 		name: "ChainPaint",
 		chain: "Ethereum",
 		txHash: "0x0eb8f8d148508e752d9643ccf49ac4cb0c21cbad346b5bbcf2d06974d31bd5c4",
-		scope: Reentrancy.Scope.SingleFunction,
-		entranceType: Reentrancy.EntranceType.Fallback,
+		scope: Scope.SingleFunction,
+		entranceType: ReentrancyAttack.EntryPoint.Fallback,
 		readonly: false
 	}));
 
@@ -90,8 +90,8 @@ describe("Reentrancy Analyzer", () => {
 		name: "Predy Finance",
 		chain: "ArbitrumOne",
 		txHash: "0xbe163f651d23f0c9e4d4a443c0cc163134a31a1c2761b60188adcfd33178f50f",
-		scope: Reentrancy.Scope.CrossFunction,
-		entranceType: Reentrancy.EntranceType.Other,
+		scope: Scope.CrossFunction,
+		entranceType: ReentrancyAttack.EntryPoint.ApplicationHook,
 		readonly: false
 	}));
 
@@ -100,8 +100,8 @@ describe("Reentrancy Analyzer", () => {
 		name: "TrustSwap",
 		chain: "Ethereum",
 		txHash: "0x83952d998cc562f40d0a58b76d563a16f3064ddb116e7b1b4e40298ca80499b8",
-		scope: Reentrancy.Scope.CrossFunction,
-		entranceType: Reentrancy.EntranceType.MaliciousToken,
+		scope: Scope.CrossFunction,
+		entranceType: ReentrancyAttack.EntryPoint.MaliciousToken,
 		readonly: false
 	}));
 
@@ -110,8 +110,8 @@ describe("Reentrancy Analyzer", () => {
 		name: "GoodDollar",
 		chain: "Ethereum",
 		txHash: "0x726459a46839c915ee2fb3d8de7f986e3c7391c605b7a622112161a84c7384d0",
-		scope: Reentrancy.Scope.CrossContract,
-		entranceType: Reentrancy.EntranceType.Other,
+		scope: Scope.CrossContract,
+		entranceType: ReentrancyAttack.EntryPoint.ApplicationHook,
 		readonly: false
 	}));
 
@@ -120,8 +120,8 @@ describe("Reentrancy Analyzer", () => {
 		name: "GemPad",
 		chain: "Ethereum",
 		txHash: "0x9ceb4698eb09e93d232e10557c3932e1e74b5d8e78170b5034512aa0a8135970",
-		scope: Reentrancy.Scope.CrossFunction,
-		entranceType: Reentrancy.EntranceType.MaliciousToken,
+		scope: Scope.CrossFunction,
+		entranceType: ReentrancyAttack.EntryPoint.MaliciousToken,
 		readonly: false
 	}));
 
@@ -130,8 +130,8 @@ describe("Reentrancy Analyzer", () => {
 		name: "NFT Trader 2",
 		chain: "Ethereum",
 		txHash: "0x431341c6d41301b7db3b719ccaec8081adf71b707069ea27d71dcdd374d8e6fa",
-		scope: Reentrancy.Scope.CrossFunction,
-		entranceType: Reentrancy.EntranceType.ERCHook,
+		scope: Scope.CrossFunction,
+		entranceType: ReentrancyAttack.EntryPoint.ERCHook,
 		readonly: false
 	}));
 
@@ -140,8 +140,8 @@ describe("Reentrancy Analyzer", () => {
 		name: "Market.xyz",
 		chain: "Polygon",
 		txHash: "0xb8efe839da0c89daa763f39f30577dc21937ae351c6f99336a0017e63d387558",
-		scope: Reentrancy.Scope.CrossContract,
-		entranceType: Reentrancy.EntranceType.Fallback,
+		scope: Scope.CrossContract,
+		entranceType: ReentrancyAttack.EntryPoint.Fallback,
 		readonly: true
 	}));
 
@@ -150,8 +150,8 @@ describe("Reentrancy Analyzer", () => {
 		name: "NFT Trader Attack 1",
 		chain: "Ethereum",
 		txHash: "0x3dc115307c7b79e9ff0afe4c1a0796c22e366a47b47ed2d82194bcd59bb4bd46",
-		scope: Reentrancy.Scope.CrossFunction,
-		entranceType: Reentrancy.EntranceType.ERCHook,
+		scope: Scope.CrossFunction,
+		entranceType: ReentrancyAttack.EntryPoint.ERCHook,
 		readonly: false
 	}));
 
@@ -160,8 +160,8 @@ describe("Reentrancy Analyzer", () => {
 		name: "Sumer Money Attack",
 		chain: "Base",
 		txHash: "0x619c44af9fedb8f5feea2dcae1da94b6d7e5e0e7f4f4a99352b6c4f5e43a4661",
-		scope: Reentrancy.Scope.CrossFunction,
-		entranceType: Reentrancy.EntranceType.Fallback,
+		scope: Scope.CrossFunction,
+		entranceType: ReentrancyAttack.EntryPoint.Fallback,
 		readonly: false
 	}));
 

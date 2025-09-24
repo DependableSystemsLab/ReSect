@@ -7,7 +7,7 @@ import { typeormConfig } from "../src/config/typeorm";
 import { JsonRpcConverter } from "../src/converters";
 import { Block, Chain, Contract, Database, Transaction } from "../src/database";
 import { Etherscan, QuickNode, Tenderly, type RPC } from "../src/providers";
-import { Reentrancy } from "../src/Reentrancy";
+import { Analyzer } from "../src/core";
 import { Hex } from "../src/utils";
 
 async function fetchBlocks() {
@@ -129,7 +129,7 @@ async function fetchContracts() {
 						const trace = await debugProvider.getDebugTrace(creationHash, chainId);
 						if (trace === null)
 							throw new Error(`Failed to retrieve debug trace for ${creationHash}`);
-						const createTrace = Reentrancy.Analyzer.findCreateTrace(trace, address);
+						const createTrace = Analyzer.findCreateTrace(trace, address);
 						if (createTrace === undefined)
 							throw new Error(`Failed to find create trace for ${address}`);
 						code = createTrace.output ?? "0x";

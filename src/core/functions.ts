@@ -1,8 +1,8 @@
 import "basic-type-extensions";
 import chalk from "chalk";
 import { format as formatDate } from "date-fns";
-import { extractSelector, type DebugTrace } from "../utils";
-import { EntranceType, Label, type AddressInfo, type AnnotatedTrace, type Entrance } from "./types";
+import { type DebugTrace } from "../utils";
+import { Label, type AddressInfo, type AnnotatedTrace } from "./types";
 
 
 export function addressToString(addr: AddressInfo): string {
@@ -30,14 +30,6 @@ export function toTraceList<T extends DebugTrace = DebugTrace>(trace: T, indices
 		current = result[i + 1] = next as T;
 	}
 	return result;
-}
-
-export function entranceToString({ type, trace }: Entrance): string {
-	let str = chalk`{red [${EntranceType[type]}]} {inverse ${trace.type}}: {cyanBright ${trace.from}} -> {cyanBright ${trace.to}}`;
-	const selector = extractSelector(trace);
-	if (selector !== undefined)
-		str += chalk` ({yellowBright ${selector ?? "fallback"}})`;
-	return str;
 }
 
 export function hasLabel(trace: AnnotatedTrace, label: Label): boolean {

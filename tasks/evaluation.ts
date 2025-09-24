@@ -8,37 +8,22 @@ import { Chain } from "../src/config/Chain";
 import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Database, ReentrancyAttack, Transaction } from "../src/database";
 import { type DebugTraceProvider, Etherscan, QuickNode, QuickNodeWithDb, Tenderly, TenderlyWithDb } from "../src/providers";
-import { Reentrancy } from "../src/Reentrancy";
+import { Analyzer, Scope, TraceNotFoundError, type AnalysisResult } from "../src/core";
 import type { Hex } from "../src/utils";
 
 
 type Promisable<T> = T | Promise<T>;
 
-function convertEntranceType(ep: ReentrancyAttack.EntryPoint): Reentrancy.EntranceType {
-	switch (ep) {
-		case ReentrancyAttack.EntryPoint.Fallback:
-			return Reentrancy.EntranceType.Fallback;
-		case ReentrancyAttack.EntryPoint.MaliciousToken:
-			return Reentrancy.EntranceType.MaliciousToken;
-		case ReentrancyAttack.EntryPoint.ERCHook:
-			return Reentrancy.EntranceType.ERCHook;
-		case ReentrancyAttack.EntryPoint.ApplicationHook:
-			return Reentrancy.EntranceType.Other;
-		default:
-			throw new Error(`Unknown entry point: ${ep}`);
-	}
-}
-
-function convertScope(scope: ReentrancyAttack.Scope): Reentrancy.Scope {
+function convertScope(scope: ReentrancyAttack.Scope): Scope {
 	switch (scope) {
 		case ReentrancyAttack.Scope.SingleFunction:
-			return Reentrancy.Scope.SingleFunction;
+			return Scope.SingleFunction;
 		case ReentrancyAttack.Scope.CrossFunction:
-			return Reentrancy.Scope.CrossFunction;
+			return Scope.CrossFunction;
 		case ReentrancyAttack.Scope.CrossContract:
 		case ReentrancyAttack.Scope.CrossProject:
 		case ReentrancyAttack.Scope.CrossChain:
-			return Reentrancy.Scope.CrossContract;
+			return Scope.CrossContract;
 		default:
 			throw new Error(`Unknown scope: ${scope}`);
 	}
@@ -52,7 +37,7 @@ const errorCheckers: Record<string, (err: any) => boolean | Promisable<string | 
 		return msg.startsWith("Invalid chain ID:") || msg.startsWith("Invalid txhash:");
 	},
 	notFound(err) {
-		return err instanceof Reentrancy.TraceNotFoundError;
+		return err instanceof TraceNotFoundError;
 	},
 	network(err) {
 		if (err instanceof Response)
@@ -135,7 +120,6 @@ async function evaluate(
 		: useDatabase
 			? new TenderlyWithDb(tenderlyNodeAccessKeys, undefined, etherscan.geth, database)
 			: new Tenderly(tenderlyNodeAccessKeys);
-	const analyzer = new Reentrancy.Analyzer(etherscan, debugProvider);
 
 	const stats = {
 		detected: 0,
@@ -158,6 +142,8 @@ async function evaluate(
 		console.log(...args);
 	};
 
+	const analyzer = new Analyzer(etherscan, debugProvider);
+
 	const fnTest = async (txn: FnTx) => {
 		const hash = `0x${txn.hash}` as const;
 		const attack = txn.attack!;
@@ -166,9 +152,9 @@ async function evaluate(
 		bar.update({ message: txInfo });
 
 		let detected = false;
-		let scope = Reentrancy.Scope.CrossContract;
+		let scope = Scope.CrossContract;
 		let readonly = false;
-		const entranceTypes = new Set<Reentrancy.EntranceType>();
+		const entranceTypes = new Set<ReentrancyAttack.EntryPoint>();
 
 		try {
 			for await (const result of analyzer.analyze(hash, txn.chain.id)) {
@@ -197,7 +183,7 @@ async function evaluate(
 			actual.scope = scope;
 		}
 		if (attack.entryPoint != null) {
-			expected.entryPoint = convertEntranceType(attack.entryPoint);
+			expected.entryPoint = attack.entryPoint;
 			const types = Array.from(entranceTypes);
 			actual.entryPoint = types.includes(expected.entryPoint) ? expected.entryPoint : types;
 		}
@@ -223,7 +209,7 @@ async function evaluate(
 		const hash = `0x${txn.hash}` as const;
 		bar.update({ message: chalk.cyan`${hash} (${txn.chain.name})` });
 
-		let result: Reentrancy.AnalysisResult | undefined;
+		let result: AnalysisResult | undefined;
 		try {
 			for await (result of analyzer.analyze(hash, txn.chain.id))
 				break;
@@ -249,7 +235,6 @@ async function evaluate(
 		txns,
 		{ maxConcurrency: concurrency }
 	);
-	await Promise.sleep(100); // wait for the last bar update to finish
 	bar.stop();
 
 	console.log(chalk.white`\nEvaluation Summary:`);
@@ -366,4 +351,5 @@ const cliParser = yargs()
 		const collection = await Database.default.getFpEvaluationTransactions(chainId, size === "all" ? undefined : size, argv.skip);
 		await evaluate("fp", collection, argv.database, argv.concurrency);
 	}
+	process.exit(0);
 })();
