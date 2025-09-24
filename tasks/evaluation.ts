@@ -288,6 +288,11 @@ const cliParser = yargs()
 			return n;
 		}
 	})
+	.option("skip", {
+		type: "number",
+		default: 0,
+		description: "Number of transactions to skip. This option is only relevant for false negative evaluation, where transactions are ordered by block number"
+	})
 	.option("concurrency", {
 		type: "number",
 		default: 1,
@@ -327,7 +332,7 @@ const cliParser = yargs()
 	else {
 		if (size === "first")
 			throw new Error(`Option --size=first is not valid for false positive evaluation`);
-		const collection = await Database.default.getFpEvaluationTransactions(chainId, size === "all" ? undefined : size);
+		const collection = await Database.default.getFpEvaluationTransactions(chainId, size === "all" ? undefined : size, argv.skip);
 		await evaluate("fp", collection, argv.database, argv.concurrency);
 	}
 })();
