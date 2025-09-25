@@ -53,8 +53,9 @@ export class QuickNode
 	extends RPC.MultiChainProviderBase<QuickNode.Chain>
 	implements RPC.MultiChainProvider, RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.Trace> {
 
-	static readonly #fetchInsts = new Map<string, Fetch>();
+	static readonly #fetchInsts = new Map<string, [regular: Fetch, trace: Fetch]>();
 
+	#traceFetch: Fetch;
 	#chainName: QuickNode.Chain;
 	readonly db: Database | undefined;
 
@@ -64,14 +65,21 @@ export class QuickNode
 		database?: Database
 	) {
 		if (!QuickNode.#fetchInsts.has(apiKey[0])) {
-			const fetch = createThrottledFetch({
+			const regular = createThrottledFetch({
 				interval: 1000,
 				maxConcurrency: QuickNode.rateLimits[apiKey[2] ?? QuickNode.Plan.Free],
 				maxRetry: 2
 			});
-			QuickNode.#fetchInsts.set(apiKey[0], fetch);
+			const trace = createThrottledFetch({
+				interval: 1000,
+				maxConcurrency: QuickNode.rateLimits[apiKey[2] ?? QuickNode.Plan.Free] / 2,
+				maxRetry: 2
+			});
+			QuickNode.#fetchInsts.set(apiKey[0], [regular, trace]);
 		}
-		super(QuickNode.#fetchInsts.get(apiKey[0])!);
+		const [fetch, traceFetch] = QuickNode.#fetchInsts.get(apiKey[0])!;
+		super(fetch);
+		this.#traceFetch = traceFetch;
 		this.#chainName = chain ? this.verifyChain(chain) : "Ethereum";
 		this.db = database;
 	}
@@ -125,7 +133,7 @@ export class QuickNode
 
 	@integration()
 	async debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: QuickNode.Chain | number) {
-		const trace = await this.request<QuickNode.DebugTraceRaw | [] | null>("debug_traceTransaction", [txHash, options], chain)
+		const trace = await this.request<QuickNode.DebugTraceRaw | [] | null>("debug_traceTransaction", [txHash, options], chain, this.#traceFetch)
 			.then(r => r == null || Array.isArray(r) ? null : r)
 			.catch(err => {
 				if (err instanceof Response && err.status === 404)

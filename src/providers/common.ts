@@ -133,8 +133,8 @@ export namespace RPC {
 
 		protected abstract getUrl(chain?: N | number): string;
 
-		protected async request<T>(method: string, params: unknown[], chain?: N | number): Promise<T> {
-			const result = await this.#fetch(this.getUrl(chain), {
+		protected async request<T>(method: string, params: unknown[], chain?: N | number, fetch?: Fetch): Promise<T> {
+			const result = await (fetch ?? this.#fetch)(this.getUrl(chain), {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json"
