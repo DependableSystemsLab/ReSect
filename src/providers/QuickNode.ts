@@ -1,4 +1,4 @@
-import { createThrottledFetch, type Fetch } from "fetch-throttler";
+import { createThrottledFetch, type DefaultThrottleConfig, type Fetch } from "fetch-throttler";
 import { Chain as AllChain, type ChainName } from "../config/Chain";
 import { Database } from "../database";
 import { Hex, verifyCallTypes } from "../utils";
@@ -66,15 +66,19 @@ export class QuickNode
 		database?: Database
 	) {
 		if (!QuickNode.#fetchInsts.has(apiKey[0])) {
-			const regular = createThrottledFetch({
+			const fetchConfig: DefaultThrottleConfig = {
 				interval: 1000,
 				maxConcurrency: QuickNode.rateLimits[apiKey[2] ?? QuickNode.Plan.Free],
-				maxRetry: 2
-			});
+				maxRetry: 2,
+				shouldRetry(errOrRes) {
+					if (errOrRes instanceof Response)
+						return errOrRes.status === 429 || errOrRes.status === 408;
+				}
+			};
+			const regular = createThrottledFetch(fetchConfig);
 			const trace = createThrottledFetch({
-				interval: 1000,
-				maxConcurrency: QuickNode.rateLimits[apiKey[2] ?? QuickNode.Plan.Free] / 2,
-				maxRetry: 2
+				...fetchConfig,
+				maxConcurrency: QuickNode.rateLimits[apiKey[2] ?? QuickNode.Plan.Free] / 2
 			});
 			QuickNode.#fetchInsts.set(apiKey[0], [regular, trace]);
 		}
