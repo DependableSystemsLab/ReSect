@@ -5,7 +5,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import readline from "node:readline";
 import { Chain } from "../src/config/Chain";
-import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
+import { etherscanApiKeys, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Database, ReentrancyAttack, Transaction } from "../src/database";
 import { type DebugTraceProvider, Etherscan, QuickNode, Tenderly } from "../src/providers";
 import { Analyzer, Scope, TraceNotFoundError, type AnalysisResult } from "../src/core";
@@ -112,7 +112,7 @@ async function evaluate(
 	concurrency: number = 1
 ) {
 	const database = Database.default;
-	const etherscan = new Etherscan(etherscanApiKey, Chain.Ethereum, useDatabase ? database : undefined);
+	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum, useDatabase ? database : undefined);
 	const debugProvider: DebugTraceProvider = quickNodeApiKey
 		? new QuickNode(quickNodeApiKey, undefined, useDatabase ? database : undefined)
 		: new Tenderly(tenderlyNodeAccessKeys, undefined, useDatabase ? database : undefined);

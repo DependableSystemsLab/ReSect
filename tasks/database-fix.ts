@@ -2,7 +2,7 @@ import "basic-type-extensions";
 import { IsNull } from "typeorm";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
+import { etherscanApiKeys, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { typeormConfig } from "../src/config/typeorm";
 import { JsonRpcConverter } from "../src/converters";
 import { Block, Chain, Contract, Database, Transaction } from "../src/database";
@@ -22,7 +22,7 @@ async function fetchBlocks() {
 	const chains = await (await database.getRepository(Chain)).find({ select: ["id"] });
 	const base = BigInt(Math.max(...chains.map(c => c.id)) + 1);
 
-	const etherscan = new Etherscan(etherscanApiKey);
+	const etherscan = new Etherscan(etherscanApiKeys);
 	const blockNumbers = new Set<bigint>();
 
 	const handleError = async (error: any) => {
@@ -95,7 +95,7 @@ async function fetchContracts() {
 		collection.push(contract);
 	}
 
-	const etherscan = new Etherscan(etherscanApiKey);
+	const etherscan = new Etherscan(etherscanApiKeys);
 	const rpcProvider: RPC.MultiChainProvider = quickNodeApiKey ? new QuickNode(quickNodeApiKey) : etherscan;
 	const debugProvider = quickNodeApiKey ? new QuickNode(quickNodeApiKey) : new Tenderly(tenderlyNodeAccessKeys);
 	const errors = [];

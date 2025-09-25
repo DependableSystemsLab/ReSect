@@ -1,29 +1,48 @@
 import { Etherscan, QuickNode, Tenderly } from "../providers";
 import { Chain } from "./Chain";
 
-const {
-	ETHERSCAN_API_KEY: etherscanApiKey_,
-	ETHERSCAN_API_TIER: etherscanApiTier = "Free"
-} = process.env;
+const ESKPREFIX = "ETHERSCAN_API_KEY";
+const ESTPREFIX = "ETHERSCAN_API_TIER";
+const ESPATTERN = /^[A-Z\d]{34}$/;
 
-if (!etherscanApiKey_)
+const esApiKeys = Object.keys(process.env)
+	.filter(key => key === ESKPREFIX || key.startsWith(`${ESKPREFIX}_`));
+const esApiTiers = Object.keys(process.env)
+	.filter(key => key === ESTPREFIX || key.startsWith(`${ESTPREFIX}_`));
+if (esApiKeys.length === 0)
 	throw new Error("ETHERSCAN_API_KEY is not set");
-if (!/^[A-Z\d]{34}$/.test(etherscanApiKey_))
-	throw new Error(`Invalid ETHERSCAN_API_KEY: ${etherscanApiKey_}`);
-
-const apiTier: Etherscan.APITier = (() => {
-	switch (etherscanApiTier.toLowerCase()) {
+const esApiKeyMap = new Map(esApiKeys.map(key => {
+	const value = process.env[key]!;
+	if (!ESPATTERN.test(value))
+		throw new Error(`Invalid ${key}: ${value}`);
+	const suffix = key === ESKPREFIX ? "" : key.substring(`${ESKPREFIX}_`.length);
+	return [suffix, value] as const;
+}));
+function convertEtherscanTier(tier: string | undefined, keyName?: string): Etherscan.APITier {
+	if (tier === undefined)
+		return Etherscan.APITier.Free;
+	switch (tier.toLowerCase()) {
 		case "free": return Etherscan.APITier.Free;
 		case "standard": return Etherscan.APITier.Standard;
 		case "advanced": return Etherscan.APITier.Advanced;
 		case "professional": return Etherscan.APITier.Professional;
 		case "proplus": return Etherscan.APITier.ProPlus;
-		default: throw new Error(`Invalid ETHERSCAN_API_TIER: ${etherscanApiTier}`);
+		default: throw new Error(`Invalid ${keyName ?? "ETHERSCAN_API_TIER"}: ${tier}`);
 	}
-})();
-
+}
+const esApiTierMap = new Map(esApiTiers.map(key => {
+	const value = convertEtherscanTier(process.env[key]!, key);
+	const suffix = key === ESTPREFIX ? "" : key.substring(`${ESTPREFIX}_`.length);
+	return [suffix, value] as const;
+}));
+export const etherscanApiKeys = Object.fromEntries(
+	esApiKeyMap.entries().map(([suffix, key]) => {
+		const tier = esApiTierMap.get(suffix) ?? Etherscan.APITier.Free;
+		return [suffix, [key, tier] as const];
+	})
+);
 export const etherscanApiKey: Etherscan.ApiKey =
-	Object.freeze([etherscanApiKey_, apiTier] as const);
+	etherscanApiKeys[""] ?? etherscanApiKeys[Object.keys(etherscanApiKeys)[0]]!;
 
 const {
 	QUICKNODE_ENDPOINT: qnEndpoint,

@@ -41,19 +41,25 @@ export class Etherscan implements RPC.MultiChainProvider {
 	);
 	static readonly BASE_URL = "https://api.etherscan.io/v2/api";
 
+	#reqId: number = 0;
 	#chain: number = 1;
 	readonly #db: Database | undefined;
-	readonly #fetch: typeof fetch;
-
-	readonly apiKey: string;
+	readonly #fetchPairs: (readonly [string, typeof fetch])[];
 
 	constructor(
-		apiKey: string | Etherscan.ApiKey,
+		apiKey: Arrayable<string | Etherscan.ApiKey> | Record<string, string | Etherscan.ApiKey>,
 		chain: number = Chain.Ethereum,
 		database?: Database
 	) {
 		this.#chain = chain;
-		[this.apiKey, this.#fetch] = getFetch(apiKey);
+		const apiKeys = typeof apiKey === "string"
+			? [apiKey]
+			: !Array.isArray(apiKey)
+				? Object.values(apiKey) as (string | Etherscan.ApiKey)[]
+				: apiKey.length === 2 && typeof apiKey[0] === "string" && typeof apiKey[1] === "number"
+					? [apiKey as unknown as Etherscan.ApiKey]
+					: apiKey as (string | Etherscan.ApiKey)[];
+		this.#fetchPairs = apiKeys.map(getFetch);
 		this.#db = database;
 	}
 
@@ -85,17 +91,18 @@ export class Etherscan implements RPC.MultiChainProvider {
 		params?: QueryObject,
 		verifyStatus: boolean = true
 	): Promise<T> {
+		const [apiKey, fetchFunc] = this.#fetchPairs[this.#reqId++ % this.#fetchPairs.length];
 		params ??= {};
 		const searchParams = toURLSearchParams({
 			...params,
 			module,
 			action,
-			apikey: this.apiKey,
+			apikey: apiKey,
 			chainid: chain ?? this.chain
 		});
 		const url = new URL(Etherscan.BASE_URL);
 		url.search = searchParams.toString();
-		const response = await this.#fetch(url.href, {
+		const response = await fetchFunc(url.href, {
 			method: "GET",
 			headers: {
 				"Accept": "application/json"
@@ -308,7 +315,7 @@ export namespace Etherscan {
 		ProPlus
 	}
 
-	export type ApiKey = Readonly<[key: string, tier?: APITier]>;
+	export type ApiKey = readonly [key: string, tier?: APITier];
 
 	export const rateLimits: Record<APITier, [perSecond: number, perDay: number]> = {
 		[Etherscan.APITier.Free]: [5, 100_000],

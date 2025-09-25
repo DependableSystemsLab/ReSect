@@ -5,7 +5,7 @@ import { Raw } from "typeorm";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { Chain as ChainList } from "../src/config/Chain";
-import { etherscanApiKey, quickNodeApiKey } from "../src/config/credentials";
+import { etherscanApiKeys, quickNodeApiKey } from "../src/config/credentials";
 import { typeormConfig } from "../src/config/typeorm";
 import { JsonRpcConverter } from "../src/converters";
 import { Block, Chain, Database, Transaction } from "../src/database";
@@ -49,7 +49,7 @@ async function fetchTransactions(
 
 	const rpcProvider = new RPC.ExtendedProvider(
 		provider === "Etherscan"
-			? new Etherscan(etherscanApiKey, chainId)
+			? new Etherscan(etherscanApiKeys, chainId)
 			: new QuickNode(quickNodeApiKey!, chainId)
 	);
 
@@ -156,7 +156,7 @@ const cliParser = yargs()
 (async () => {
 	const argv = await cliParser.parseAsync(hideBin(process.argv));
 
-	const etherscan = new Etherscan(etherscanApiKey, argv.chain);
+	const etherscan = new Etherscan(etherscanApiKeys, argv.chain);
 	async function parseRange(type: "start" | "end", value: string | undefined): Promise<number> {
 		if (value?.match(/^\d+$/))
 			return parseInt(value);

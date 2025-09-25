@@ -1,6 +1,6 @@
 import inspector from "node:inspector";
 import { Chain, type ChainName } from "../src/config/Chain";
-import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
+import { etherscanApiKeys, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Database, ReentrancyAttack } from "../src/database";
 import { Etherscan, QuickNode, Tenderly, type DebugTraceProvider } from "../src/providers";
 import { Analyzer, Scope } from "../src/core";
@@ -31,12 +31,12 @@ describe("Reentrancy Analyzer", () => {
 	const timeout = debug ? 24 * 60 * 60_000 : 30_000;
 	jest.setTimeout(timeout);
 
-	const etherscan = new Etherscan(etherscanApiKey, Chain.Ethereum);
+	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum);
 	const debugProvider: DebugTraceProvider = quickNodeApiKey
 		? new QuickNode(quickNodeApiKey, "Ethereum")
 		: new Tenderly(tenderlyNodeAccessKeys, "Ethereum");
 
-	const etherscanWithDb = new Etherscan(etherscanApiKey, Chain.Ethereum, Database.default);
+	const etherscanWithDb = new Etherscan(etherscanApiKeys, Chain.Ethereum, Database.default);
 	const debugProviderWithDb: DebugTraceProvider = quickNodeApiKey
 		? new QuickNode(quickNodeApiKey, "Ethereum", Database.default)
 		: new Tenderly(tenderlyNodeAccessKeys, "Ethereum", Database.default);
