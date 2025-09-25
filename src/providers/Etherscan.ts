@@ -35,16 +35,13 @@ function getFetch(apiKey: string | Etherscan.ApiKey) {
 }
 
 export class Etherscan implements RPC.MultiChainProvider {
-	static readonly #integration = integration(
-		function (this: Etherscan) { return this.#db; },
-		{ defaultChain: function (this: Etherscan) { return this.chain; } }
-	);
 	static readonly BASE_URL = "https://api.etherscan.io/v2/api";
 
 	#reqId: number = 0;
 	#chain: number = 1;
-	readonly #db: Database | undefined;
 	readonly #fetchPairs: (readonly [string, typeof fetch])[];
+
+	readonly db: Database | undefined;
 
 	constructor(
 		apiKey: Arrayable<string | Etherscan.ApiKey> | Record<string, string | Etherscan.ApiKey>,
@@ -60,7 +57,7 @@ export class Etherscan implements RPC.MultiChainProvider {
 					? [apiKey as unknown as Etherscan.ApiKey]
 					: apiKey as (string | Etherscan.ApiKey)[];
 		this.#fetchPairs = apiKeys.map(getFetch);
-		this.#db = database;
+		this.db = database;
 	}
 
 	get chain() {
@@ -160,7 +157,7 @@ export class Etherscan implements RPC.MultiChainProvider {
 		return this.#request<RPC.Block | null>("proxy", "eth_getBlockByNumber", chain, { tag: blockNumber, boolean: full });
 	}
 
-	@Etherscan.#integration
+	@integration()
 	getTransactionByHash(hash: Hex.TxHash, chain?: number) {
 		return this.#request<RPC.Transaction | null>("proxy", "eth_getTransactionByHash", chain, { txhash: hash });
 	}
@@ -178,7 +175,7 @@ export class Etherscan implements RPC.MultiChainProvider {
 		});
 	}
 
-	@Etherscan.#integration
+	@integration()
 	getCode(address: Hex.Address, tag: RPC.BlockNumber, chain?: number) {
 		tag = this.verifyBlockTag(tag);
 		return this.#request<Hex.String>("proxy", "eth_getCode", chain, { address, tag });
@@ -219,8 +216,8 @@ export class Etherscan implements RPC.MultiChainProvider {
 		chain ??= this.#chain;
 		const addresses = contractAddresses.map(Hex.verifyAddress);
 		const results = new Map<Hex.Address, Etherscan.ContractCreation | null>();
-		if (this.#db) {
-			for (const contract of await this.#db.getContracts(addresses)) {
+		if (this.db) {
+			for (const contract of await this.db.getContracts(addresses)) {
 				if ("eoaAddress" in contract)
 					results.set(contract.eoaAddress, null);
 				else if (contract.contractCreator)
@@ -248,13 +245,13 @@ export class Etherscan implements RPC.MultiChainProvider {
 			await slices.forEachAsync(request);
 		}
 
-		if (this.#db) {
+		if (this.db) {
 			const eoas = (contractAddresses as Hex.Address[]).filter(c => results.get(c) === null);
 			const newCreations = contractAddresses.map(c => results.get(c as Hex.Address)).filter(c => c != undefined);
 			const txHashes = newCreations.map(c => c.txHash)
 				.filter((tx): tx is Hex.TxHash => !tx.startsWith("GENESIS_"))
 				.unique();
-			const existing = await this.#db.filterTxHashes(txHashes);
+			const existing = await this.db.filterTxHashes(txHashes);
 			if (existing.length < txHashes.length) {
 				const missing = Array.difference(txHashes, existing);
 				const txs = await missing.mapAsync(txHash => this.getTransactionByHash(txHash, chain));
@@ -262,12 +259,12 @@ export class Etherscan implements RPC.MultiChainProvider {
 					if (txs[i] == null)
 						throw new Error(`Transaction ${missing[i]} not found`);
 				}
-				await this.#db.saveTransactions(txs as RPC.Transaction[], chain);
+				await this.db.saveTransactions(txs as RPC.Transaction[], chain);
 			}
 			if (eoas.length > 0)
-				await this.#db.saveEOAs(eoas, chain ?? this.#chain);
+				await this.db.saveEOAs(eoas, chain ?? this.#chain);
 			if (newCreations.length > 0)
-				await this.#db.saveContracts(newCreations, chain ?? this.#chain);
+				await this.db.saveContracts(newCreations, chain ?? this.#chain);
 		}
 		return addresses.map(a => results.get(a)!);
 	}

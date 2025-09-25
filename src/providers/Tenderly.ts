@@ -34,10 +34,6 @@ export class Tenderly
 	extends RPC.MultiChainProviderBase<Tenderly.Chain>
 	implements RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.TraceInfo> {
 
-	static readonly #integration = integration(
-		function (this: Tenderly) { return this.db; },
-		{ defaultChain: function (this: Tenderly) { return this.chain; } }
-	);
 	readonly #apiKeys: Tenderly.ApiKeys;
 	#chainName: Tenderly.Chain;
 	readonly db: Database | undefined;
@@ -86,25 +82,30 @@ export class Tenderly
 	blockNumber(chain?: Tenderly.Chain | number) {
 		return this.request<Hex.String>("eth_blockNumber", [], chain);
 	}
+
 	getBlockByNumber(blockNumber: RPC.BlockNumber, full: boolean, chain?: Tenderly.Chain | number) {
 		return this.request<RPC.Block | RPC.Block<RPC.Transaction> | null>("eth_getBlockByNumber", [blockNumber, full], chain);
 	}
-	@Tenderly.#integration
+
+	@integration()
 	getTransactionByHash(txHash: Hex.TxHash, chain?: Tenderly.Chain | number) {
 		return this.request<RPC.Transaction | null>("eth_getTransactionByHash", [txHash], chain);
 	}
-	@Tenderly.#integration
+
+	@integration()
 	getCode(address: Hex.Address, blockNumber: RPC.BlockNumber, chain?: Tenderly.Chain | number) {
 		return this.request<Hex.String>("eth_getCode", [address, blockNumber], chain);
 	}
+
 	getStorageAt(address: Hex.Address, position: Hex.String, blockNumber: RPC.BlockNumber, chain?: Tenderly.Chain | number) {
 		return this.request<Hex.String>("eth_getStorageAt", [address, position, blockNumber], chain);
 	}
+
 	call(request: RPC.CallRequest, blockNumber: RPC.BlockNumber, chain?: Tenderly.Chain | number) {
 		return this.request<Hex.String>("eth_call", [request, blockNumber], chain);
 	}
 
-	@Tenderly.#integration
+	@integration()
 	async debugTraceTransaction(
 		txHash: Hex.String,
 		options: RPC.Debug.DebugTransactionOptions,

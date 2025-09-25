@@ -43,8 +43,8 @@ export interface IntegrationOptions {
 }
 
 export function integration(
-	database?: Database | (() => Database | null | undefined),
-	{ method, read = true, write = true, defaultChain }: IntegrationOptions = {}
+	database: Database | (() => Database | null | undefined) = function (this: any) { return this.db; },
+	{ method, read = true, write = true, defaultChain = function (this: any) { return this.chain; } }: IntegrationOptions = {}
 ): MethodDecorator {
 	const getDatabase = typeof database !== "function"
 		? () => database

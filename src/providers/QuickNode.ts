@@ -52,11 +52,9 @@ const endpoints = {
 export class QuickNode
 	extends RPC.MultiChainProviderBase<QuickNode.Chain>
 	implements RPC.MultiChainProvider, RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.Trace> {
+
 	static readonly #fetchInsts = new Map<string, Fetch>();
-	static readonly #integration = integration(
-		function (this: QuickNode) { return this.db; },
-		{ defaultChain: function (this: QuickNode) { return this.chain; } }
-	);
+
 	#chainName: QuickNode.Chain;
 	readonly db: Database | undefined;
 
@@ -102,25 +100,30 @@ export class QuickNode
 	blockNumber(chain?: QuickNode.Chain | number) {
 		return this.request<Hex.String>("eth_blockNumber", [], chain);
 	}
+
 	getBlockByNumber(blockNumber: RPC.BlockNumber, full: boolean, chain?: QuickNode.Chain | number) {
 		return this.request<RPC.Block | RPC.Block<RPC.Transaction> | null>("eth_getBlockByNumber", [blockNumber, full], chain);
 	}
-	@QuickNode.#integration
+
+	@integration()
 	getTransactionByHash(txHash: Hex.TxHash, chain?: QuickNode.Chain | number) {
 		return this.request<RPC.Transaction | null>("eth_getTransactionByHash", [txHash], chain);
 	}
-	@QuickNode.#integration
+
+	@integration()
 	getCode(address: Hex.Address, blockNumber: RPC.BlockNumber, chain?: QuickNode.Chain | number) {
 		return this.request<Hex.String>("eth_getCode", [address, blockNumber], chain);
 	}
+
 	getStorageAt(address: Hex.Address, position: Hex.String, blockNumber: RPC.BlockNumber, chain?: QuickNode.Chain | number) {
 		return this.request<Hex.String>("eth_getStorageAt", [address, position, blockNumber], chain);
 	}
+
 	call(request: RPC.CallRequest, blockNumber: RPC.BlockNumber, chain?: QuickNode.Chain | number) {
 		return this.request<Hex.String>("eth_call", [request, blockNumber], chain);
 	}
 
-	@QuickNode.#integration
+	@integration()
 	async debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: QuickNode.Chain | number) {
 		const trace = await this.request<QuickNode.DebugTraceRaw | [] | null>("debug_traceTransaction", [txHash, options], chain)
 			.then(r => r == null || Array.isArray(r) ? null : r)
