@@ -95,6 +95,12 @@ export class Transaction {
 	hasTags(tag: Transaction.Tags): boolean {
 		return (this.tags ?? 0 & tag) === tag;
 	}
+	addTags(tag: Transaction.Tags): Transaction.Tags {
+		return this.tags = (this.tags ?? 0) | tag;
+	}
+	removeTags(tag: Transaction.Tags): Transaction.Tags {
+		return this.tags = (this.tags ?? 0) & ~tag;
+	}
 }
 
 export namespace Transaction {
@@ -104,7 +110,8 @@ export namespace Transaction {
 		AttackContractDeployment = 1 << 1,
 		AttackPreparation = 1 << 2,
 		Exploit = 1 << 3,
-		RandomlySelected = 1 << 4
+		FPDataset = 1 << 4,
+		Reentrancy = 1 << 5
 	}
 
 	export const relations = Object.freeze(["chain", "block", "attack", "traces", "createdContracts"]) satisfies RelationKeys<Transaction>;

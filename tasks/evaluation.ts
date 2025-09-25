@@ -105,7 +105,7 @@ async function handleError(error: any, stats: Record<string, number>) {
 }
 
 type FnTx = Pick<Transaction.WithAttack, "hash" | "chain" | "attack">;
-type FpTx = Pick<Transaction.WithRelations<"chain">, "hash" | "chain">;
+type FpTx = Transaction.WithRelations<"chain">;
 
 async function evaluate(type: "fn", txns: readonly FnTx[], useDatabase?: boolean, concurrancy?: number): Promise<void>;
 async function evaluate(type: "fp", txns: readonly FpTx[], useDatabase?: boolean, concurrancy?: number): Promise<void>;
@@ -116,6 +116,7 @@ async function evaluate(
 	concurrency: number = 1
 ) {
 	const database = Database.default;
+	const txRepo = await database.getRepository(Transaction);
 	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum, useDatabase ? database : undefined);
 	const debugProvider: DebugTraceProvider = quickNodeApiKey
 		? new QuickNode(quickNodeApiKey, undefined, useDatabase ? database : undefined)
@@ -220,9 +221,18 @@ async function evaluate(
 			return;
 		}
 
-		if (result) {
-			stats.positive.push({ hash, result });
-			log(chalk.yellow`Positive detected: ${hash}`, index);
+		if (!result)
+			return;
+		stats.positive.push({ hash, result });
+		log(chalk.yellow`Positive detected: ${hash}`, index);
+		log(result.toString());
+		if (!txn.hasTags(Transaction.Tags.Reentrancy)) {
+			txn.addTags(Transaction.Tags.Reentrancy);
+			await txRepo.update(txn.hash, { tags: txn.tags })
+				.catch(err => {
+					log(chalk.red`Failed to update tags for ${hash}`, index);
+					console.log(err);
+				});
 		}
 		bar.update({ message: `Reentrancy: ${stats.positive.length}` });
 	};

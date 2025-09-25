@@ -208,7 +208,7 @@ export class Database {
 		const txns = await repo.find({
 			where: {
 				chainId,
-				tags: Raw(alias => `(${alias} & ${Transaction.Tags.RandomlySelected}) != 0`)
+				tags: Raw(alias => `(${alias} & ${Transaction.Tags.FPDataset}) != 0`)
 			},
 			skip,
 			take,

@@ -60,7 +60,7 @@ async function fetchTransactions(
 	})).map(b => b.number));
 	const existingTxCount = await txRepo.countBy({
 		chainId,
-		tags: Raw(alias => `(${alias} & ${Transaction.Tags.RandomlySelected}) != 0`)
+		tags: Raw(alias => `(${alias} & ${Transaction.Tags.FPDataset}) != 0`)
 	});
 	if (existingTxCount >= total) {
 		console.log(`Already have ${existingTxCount} transactions in database, which meets or exceeds the requested total of ${total}.`);
@@ -105,7 +105,7 @@ async function fetchTransactions(
 				if (commonTokenSelectors.has(selector))
 					continue; // Skip common token interactions
 				const txEntity = JsonRpcConverter.transactionToEntity(tx, chainId);
-				txEntity.tags = Transaction.Tags.RandomlySelected;
+				txEntity.addTags(Transaction.Tags.FPDataset);
 				txEntities.push(txEntity);
 				if (count + txEntities.length >= total)
 					break;
