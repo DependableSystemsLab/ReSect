@@ -1,5 +1,5 @@
 import "basic-type-extensions";
-import { IsNull } from "typeorm";
+import { In, IsNull } from "typeorm";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { etherscanApiKeys, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
@@ -10,11 +10,13 @@ import { Etherscan, QuickNode, Tenderly, type RPC } from "../src/providers";
 import { Analyzer } from "../src/core";
 import { Hex } from "../src/utils";
 
+
+const database = new Database({
+	...typeormConfig,
+	logging: ["warn", "error"]
+});
+
 async function fetchBlocks() {
-	const database = new Database({
-		...typeormConfig,
-		logging: ["warn", "error"]
-	});
 	const repo = await database.getRepository(Transaction);
 	const txs = await repo.find({ where: { blockNumber: IsNull() } });
 	console.log(`Found ${txs.length} transactions without block number`);
@@ -71,10 +73,6 @@ async function fetchBlocks() {
 }
 
 async function fetchContracts() {
-	const database = new Database({
-		...typeormConfig,
-		logging: ["warn", "error"]
-	});
 	const repo = await database.getRepository(Contract);
 	const txnRepo = await database.getRepository(Transaction);
 	const blockRepo = await database.getRepository(Block);
@@ -168,9 +166,63 @@ async function fetchContracts() {
 		throw new AggregateError(errors);
 }
 
+async function cleanBlocks(chainId?: number) {
+	const repo = await database.getRepository(Block);
+	const txRepo = await database.getRepository(Transaction);
+	const blocks = await repo.find({
+		select: ["number", "chainId"],
+		where: { chainId }
+	});
+	const blockNumbersByChain = new Map<number, Set<number>>();
+	for (const { chainId, number } of blocks) {
+		let set = blockNumbersByChain.get(chainId);
+		if (!set) {
+			set = new Set<number>();
+			blockNumbersByChain.set(chainId, set);
+		}
+		set.add(number);
+	}
+	const txs = await txRepo.find({
+		select: ["blockNumber", "chainId"],
+		where: { chainId }
+	});
+	const txBlockNumbersByChain = new Map<number, Set<number>>();
+	for (const { chainId, blockNumber } of txs) {
+		if (chainId === undefined)
+			continue;
+		let set = txBlockNumbersByChain.get(chainId);
+		if (!set) {
+			set = new Set<number>();
+			txBlockNumbersByChain.set(chainId, set);
+		}
+		set.add(blockNumber!);
+	}
+	for (const [chain, blockNumbers] of blockNumbersByChain) {
+		const txBlockNumbers = txBlockNumbersByChain.get(chain);
+		const diff = txBlockNumbers ? blockNumbers.difference(txBlockNumbers) : blockNumbers;
+		if (diff.size > 0) {
+			const result = await repo.delete({
+				chainId: chain,
+				number: In(Array.from(diff))
+			});
+			console.log(`Deleted ${result.affected} blocks for chain ${chain}`);
+		}
+	}
+}
+
 const cliParser = yargs()
 	.command("fetch-blocks", false, undefined, fetchBlocks)
 	.command("fetch-contracts", false, undefined, fetchContracts)
+	.command({
+		command: "clean-blocks [chainId]",
+		describe: "Remove blocks that have no associated transactions",
+		builder: yargs => yargs.positional("chainId", {
+			type: "number",
+			describe: "Chain ID to clean blocks for (all chains if not specified)",
+			demandOption: false
+		}),
+		handler: argv => cleanBlocks(argv.chainId)
+	})
 	.demandCommand(1, "You need to specify a command")
 	.strict()
 	.help()
