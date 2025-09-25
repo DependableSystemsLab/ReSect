@@ -1,6 +1,6 @@
 import { Exclude, Type } from "class-transformer";
 import type { SetFieldType } from "type-fest";
-import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 import { Hex } from "../../utils";
 import { Chain } from "./Chain";
 import { Contract } from "./Contract";
@@ -15,9 +15,11 @@ export class Transaction {
 	hash!: Hex.TxHashNP;
 
 	@Column("integer", { name: "chain" })
+	@Index()
 	chainId?: number;
 
 	@Column("integer", { name: "block_number", nullable: true })
+	@Index()
 	blockNumber?: number | null;
 
 	@Column("integer", { name: "block_index", nullable: true })

@@ -1,4 +1,4 @@
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
+import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
 import { Hex } from "../../utils";
 import type { Block } from "./Block";
 import { Chain } from "./Chain";
@@ -21,6 +21,7 @@ export class Contract {
 		length: 64,
 		nullable: true
 	})
+	@Index()
 	creationTxHash?: Hex.TxHashNP | null;
 
 	@Column("character", {
