@@ -85,11 +85,10 @@ async function fetchTransactions(
 				continue;
 
 			const block = await rpcProvider.getBlockByNumber(blockNumber, true, chainId);
+			existingNumbers.add(blockNumber);
 			if (block == null)
 				continue;
 
-			const blockEntity = JsonRpcConverter.blockToEntity(block, chainId);
-			await blockRepo.save(blockEntity);
 			const txEntities = new Array<Transaction>();
 			for (const tx of block.transactions) {
 				if (tx.from === tx.to)
@@ -105,10 +104,12 @@ async function fetchTransactions(
 				if (count + txEntities.length >= total)
 					break;
 			}
-			await txRepo.save(txEntities);
 
-			count += txEntities.length;
-			existingNumbers.add(blockNumber);
+			if (txEntities.length) {
+				await blockRepo.save(JsonRpcConverter.blockToEntity(block, chainId));
+				await txRepo.save(txEntities);
+				count += txEntities.length;
+			}
 			const nonTrivialPercent = block.transactions.length === 0 ? 0 : (txEntities.length / block.transactions.length * 100).toFixed(0);
 			bar.update(count, { message: `${blockNumber}: ${txEntities.length} / ${block.transactions.length} (${nonTrivialPercent}%) non-trivial` });
 		}
