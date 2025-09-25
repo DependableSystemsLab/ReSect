@@ -30,8 +30,8 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0
       fetch-throttler:
-        specifier: ^1.2.2
-        version: 1.2.2
+        specifier: ^1.3.0
+        version: 1.3.0
       js-sha3:
         specifier: ^0.9.3
         version: 0.9.3
@@ -961,8 +961,8 @@ packages:
       picomatch:
         optional: true
 
-  fetch-throttler@1.2.2:
-    resolution: {integrity: sha512-ELdSHPxZwjAOTxR6mGs0at4QJr5yKQtK1RIwraaKdwyw9zY+1X4261BaCp4kc1gBZ7nFuBrjUPwzXNMCduHGIg==}
+  fetch-throttler@1.3.0:
+    resolution: {integrity: sha512-WRmfK2Iztw11mhiqAcdkuvf83duDnULMp9u5Rjb8Ea3ddhW3go72BhslGhae4NZCcT4mhlr0CsnuB93DUdWL5w==}
 
   filelist@1.0.4:
     resolution: {integrity: sha512-w1cEuf3S+DrLCQL7ET6kz+gmlJdbq9J7yXCSjK/OZCPA+qEN1WyF4ZAf0YYJa4/shHJra2t/d/r8SV4Ji+x+8Q==}
@@ -2855,7 +2855,7 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.2
 
-  fetch-throttler@1.2.2: {}
+  fetch-throttler@1.3.0: {}
 
   filelist@1.0.4:
     dependencies:

@@ -1,5 +1,5 @@
 import "basic-type-extensions";
-import { createThrottledFetch } from "fetch-throttler";
+import { createThrottledFetch, ThrottledFetchInst } from "fetch-throttler";
 import { Arrayable } from "type-fest";
 import { Chain } from "../config/Chain";
 import { Database } from "../database";
@@ -8,7 +8,7 @@ import type { RPC } from "./common";
 import { integration } from "./integration";
 
 
-const fetchInstances = new Map<string, typeof fetch>();
+const fetchInstances = new Map<string, ThrottledFetchInst>();
 function getFetch(apiKey: string | Etherscan.ApiKey) {
 	const [key, tier = Etherscan.APITier.Free] = typeof apiKey == "string" ? [apiKey] : apiKey;
 	let fetchInst = fetchInstances.get(key);
@@ -37,9 +37,8 @@ function getFetch(apiKey: string | Etherscan.ApiKey) {
 export class Etherscan implements RPC.MultiChainProvider {
 	static readonly BASE_URL = "https://api.etherscan.io/v2/api";
 
-	#reqId: number = 0;
 	#chain: number = 1;
-	readonly #fetchPairs: (readonly [string, typeof fetch])[];
+	readonly #fetchPairs: (readonly [string, ThrottledFetchInst])[];
 
 	readonly db: Database | undefined;
 
@@ -88,7 +87,10 @@ export class Etherscan implements RPC.MultiChainProvider {
 		params?: QueryObject,
 		verifyStatus: boolean = true
 	): Promise<T> {
-		const [apiKey, fetchFunc] = this.#fetchPairs[this.#reqId++ % this.#fetchPairs.length];
+		const [apiKey, fetchFunc] = this.#fetchPairs.minimum(([, f]) => {
+			const stats = f.stats(Etherscan.BASE_URL);
+			return (stats.active + stats.waiting) / f.config.maxConcurrency;
+		});
 		params ??= {};
 		const searchParams = toURLSearchParams({
 			...params,
