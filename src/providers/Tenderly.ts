@@ -2,7 +2,7 @@ import { Chain as AllChain, type ChainName } from "../config/Chain";
 import { Database } from "../database";
 import { verifyCallTypes, Hex } from "../utils";
 import { verifyChain, RPC, type DebugTraceProvider } from "./common";
-import { debugTraceTransaction, type IntegrationContext } from "./integration";
+import { integration } from "./integration";
 
 
 const endpoints = {
@@ -34,12 +34,17 @@ export class Tenderly
 	extends RPC.MultiChainProviderBase<Tenderly.Chain>
 	implements RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.TraceInfo> {
 
+	static readonly #integration = integration(
+		function (this: Tenderly) { return this.db; },
+		{ defaultChain: function (this: Tenderly) { return this.chain; } }
+	);
 	readonly #apiKeys: Tenderly.ApiKeys;
 	#chainName: Tenderly.Chain;
+	readonly db: Database | undefined;
 
-	constructor(chain: Tenderly.Chain | number, accessKey: string);
-	constructor(apiKeys: Tenderly.ApiKeys, defaultChain?: Tenderly.Chain);
-	constructor(param1: Tenderly.Chain | number | Tenderly.ApiKeys, param2?: string) {
+	constructor(chain: Tenderly.Chain | number, accessKey: string, database?: Database);
+	constructor(apiKeys: Tenderly.ApiKeys, defaultChain?: Tenderly.Chain, database?: Database);
+	constructor(param1: Tenderly.Chain | number | Tenderly.ApiKeys, param2?: string, database?: Database) {
 		super();
 		if (typeof param1 !== "object")
 			param1 = this.verifyChain(param1);
@@ -47,6 +52,7 @@ export class Tenderly
 		this.#chainName = typeof param1 === "object"
 			? this.verifyChain(param2 as Tenderly.Chain ?? "Ethereum")
 			: this.verifyChain(param1);
+		this.db = database;
 	}
 
 	override get name(): string {
@@ -77,10 +83,28 @@ export class Tenderly
 		return `https://${endpoints[chain]}.gateway.tenderly.co/${this.#apiKeys[chain]}`;
 	}
 
-	getDebugTrace(txHash: Hex.String, chain?: Tenderly.Chain | number) {
-		return this.debugTraceTransaction(txHash, { tracer: "callTracer" }, chain);
+	blockNumber(chain?: Tenderly.Chain | number) {
+		return this.request<Hex.String>("eth_blockNumber", [], chain);
+	}
+	getBlockByNumber(blockNumber: RPC.BlockNumber, full: boolean, chain?: Tenderly.Chain | number) {
+		return this.request<RPC.Block | RPC.Block<RPC.Transaction> | null>("eth_getBlockByNumber", [blockNumber, full], chain);
+	}
+	@Tenderly.#integration
+	getTransactionByHash(txHash: Hex.TxHash, chain?: Tenderly.Chain | number) {
+		return this.request<RPC.Transaction | null>("eth_getTransactionByHash", [txHash], chain);
+	}
+	@Tenderly.#integration
+	getCode(address: Hex.Address, blockNumber: RPC.BlockNumber, chain?: Tenderly.Chain | number) {
+		return this.request<Hex.String>("eth_getCode", [address, blockNumber], chain);
+	}
+	getStorageAt(address: Hex.Address, position: Hex.String, blockNumber: RPC.BlockNumber, chain?: Tenderly.Chain | number) {
+		return this.request<Hex.String>("eth_getStorageAt", [address, position, blockNumber], chain);
+	}
+	call(request: RPC.CallRequest, blockNumber: RPC.BlockNumber, chain?: Tenderly.Chain | number) {
+		return this.request<Hex.String>("eth_call", [request, blockNumber], chain);
 	}
 
+	@Tenderly.#integration
 	async debugTraceTransaction(
 		txHash: Hex.String,
 		options: RPC.Debug.DebugTransactionOptions,
@@ -90,44 +114,9 @@ export class Tenderly
 		const trace = await this.request<Tenderly.DebugTraceRaw | null>("debug_traceTransaction", [txHash, options], chain);
 		return trace ? verifyCallTypes(trace) : null;
 	}
-}
 
-export class TenderlyWithDb extends Tenderly {
-	readonly #ctx: IntegrationContext;
-
-	constructor(
-		chain: Tenderly.Chain | number,
-		accessKey: string,
-		provider: RPC.MultiChainProvider,
-		db?: Database
-	);
-	constructor(
-		apiKeys: Tenderly.ApiKeys,
-		defaultChain: Tenderly.Chain | undefined,
-		provider: RPC.MultiChainProvider,
-		db?: Database
-	);
-	constructor(
-		param1: Tenderly.Chain | number | Tenderly.ApiKeys,
-		param2: string | undefined,
-		provider: RPC.MultiChainProvider,
-		db?: Database
-	) {
-		// @ts-ignore
-		super(param1, param2);
-		const database = db ?? Database.default;
-		this.#ctx = new Proxy(provider, {
-			get: (target, p, receiver) => p === "db" ? database : Reflect.get(target, p, receiver)
-		}) as IntegrationContext;
-	}
-
-	override debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: Tenderly.Chain | number) {
-		chain = chain === undefined ? this.chain : AllChain[this.verifyChain(chain)];
-		return debugTraceTransaction.call(
-			this.#ctx,
-			super.debugTraceTransaction.bind(this),
-			txHash, options, chain
-		);
+	getDebugTrace(txHash: Hex.String, chain?: Tenderly.Chain | number) {
+		return this.debugTraceTransaction(txHash, { tracer: "callTracer" }, chain);
 	}
 }
 

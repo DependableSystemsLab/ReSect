@@ -3,7 +3,7 @@ import { Chain as AllChain, type ChainName } from "../config/Chain";
 import { Database } from "../database";
 import { Hex, verifyCallTypes } from "../utils";
 import { verifyChain, RPC, type DebugTraceProvider } from "./common";
-import { debugTraceTransaction, getCode, getTransactionByHash } from "./integration";
+import { integration } from "./integration";
 
 
 const endpoints = {
@@ -53,11 +53,17 @@ export class QuickNode
 	extends RPC.MultiChainProviderBase<QuickNode.Chain>
 	implements RPC.MultiChainProvider, RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.Trace> {
 	static readonly #fetchInsts = new Map<string, Fetch>();
+	static readonly #integration = integration(
+		function (this: QuickNode) { return this.db; },
+		{ defaultChain: function (this: QuickNode) { return this.chain; } }
+	);
 	#chainName: QuickNode.Chain;
+	readonly db: Database | undefined;
 
 	constructor(
 		readonly apiKey: QuickNode.ApiKey,
-		chain?: QuickNode.Chain | number
+		chain?: QuickNode.Chain | number,
+		database?: Database
 	) {
 		if (!QuickNode.#fetchInsts.has(apiKey[0])) {
 			const fetch = createThrottledFetch({
@@ -69,6 +75,7 @@ export class QuickNode
 		}
 		super(QuickNode.#fetchInsts.get(apiKey[0])!);
 		this.#chainName = chain ? this.verifyChain(chain) : "Ethereum";
+		this.db = database;
 	}
 
 	override get name(): string {
@@ -98,9 +105,11 @@ export class QuickNode
 	getBlockByNumber(blockNumber: RPC.BlockNumber, full: boolean, chain?: QuickNode.Chain | number) {
 		return this.request<RPC.Block | RPC.Block<RPC.Transaction> | null>("eth_getBlockByNumber", [blockNumber, full], chain);
 	}
+	@QuickNode.#integration
 	getTransactionByHash(txHash: Hex.TxHash, chain?: QuickNode.Chain | number) {
 		return this.request<RPC.Transaction | null>("eth_getTransactionByHash", [txHash], chain);
 	}
+	@QuickNode.#integration
 	getCode(address: Hex.Address, blockNumber: RPC.BlockNumber, chain?: QuickNode.Chain | number) {
 		return this.request<Hex.String>("eth_getCode", [address, blockNumber], chain);
 	}
@@ -111,6 +120,7 @@ export class QuickNode
 		return this.request<Hex.String>("eth_call", [request, blockNumber], chain);
 	}
 
+	@QuickNode.#integration
 	async debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: QuickNode.Chain | number) {
 		const trace = await this.request<QuickNode.DebugTraceRaw | [] | null>("debug_traceTransaction", [txHash, options], chain)
 			.then(r => r == null || Array.isArray(r) ? null : r)
@@ -124,47 +134,6 @@ export class QuickNode
 
 	getDebugTrace(txHash: Hex.TxHash, chain?: number) {
 		return this.debugTraceTransaction(txHash, { tracer: "callTracer" }, chain);
-	}
-}
-
-export class QuickNodeWithDb extends QuickNode {
-	readonly db: Database;
-
-	constructor(
-		apiKey: QuickNode.ApiKey,
-		chain?: QuickNode.Chain | number,
-		db?: Database
-	) {
-		super(apiKey, chain);
-		this.db = db ?? Database.default;
-	}
-
-	override getCode(address: Hex.Address, blockNumber: RPC.BlockNumber, chain?: QuickNode.Chain | number) {
-		chain = chain === undefined ? this.chain : AllChain[this.verifyChain(chain)];
-		return getCode.call(
-			this,
-			super.getCode.bind(this),
-			address, blockNumber, chain
-		);
-	}
-
-	override getTransactionByHash(txHash: Hex.TxHash, chain?: QuickNode.Chain | number) {
-		chain = chain === undefined ? this.chain : AllChain[this.verifyChain(chain)];
-		return getTransactionByHash.call(
-			this,
-			super.getTransactionByHash.bind(this),
-			txHash, chain
-		);
-	}
-
-
-	override debugTraceTransaction(txHash: Hex.TxHash, options: RPC.Debug.DebugTransactionOptions, chain?: QuickNode.Chain | number) {
-		chain = chain === undefined ? this.chain : AllChain[this.verifyChain(chain)];
-		return debugTraceTransaction.call(
-			this,
-			super.debugTraceTransaction.bind(this),
-			txHash, options, chain
-		);
 	}
 }
 

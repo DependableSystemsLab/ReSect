@@ -7,7 +7,7 @@ import readline from "node:readline";
 import { Chain } from "../src/config/Chain";
 import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Database, ReentrancyAttack, Transaction } from "../src/database";
-import { type DebugTraceProvider, Etherscan, QuickNode, QuickNodeWithDb, Tenderly, TenderlyWithDb } from "../src/providers";
+import { type DebugTraceProvider, Etherscan, QuickNode, Tenderly } from "../src/providers";
 import { Analyzer, Scope, TraceNotFoundError, type AnalysisResult } from "../src/core";
 import type { Hex } from "../src/utils";
 
@@ -114,12 +114,8 @@ async function evaluate(
 	const database = Database.default;
 	const etherscan = new Etherscan(etherscanApiKey, Chain.Ethereum, useDatabase ? database : undefined);
 	const debugProvider: DebugTraceProvider = quickNodeApiKey
-		? useDatabase
-			? new QuickNodeWithDb(quickNodeApiKey, undefined, database)
-			: new QuickNode(quickNodeApiKey)
-		: useDatabase
-			? new TenderlyWithDb(tenderlyNodeAccessKeys, undefined, etherscan.geth, database)
-			: new Tenderly(tenderlyNodeAccessKeys);
+		? new QuickNode(quickNodeApiKey, undefined, useDatabase ? database : undefined)
+		: new Tenderly(tenderlyNodeAccessKeys, undefined, useDatabase ? database : undefined);
 
 	const stats = {
 		detected: 0,

@@ -2,7 +2,7 @@ import inspector from "node:inspector";
 import { Chain, type ChainName } from "../src/config/Chain";
 import { etherscanApiKey, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Database, ReentrancyAttack } from "../src/database";
-import { Etherscan, QuickNode, QuickNodeWithDb, Tenderly, TenderlyWithDb, type DebugTraceProvider } from "../src/providers";
+import { Etherscan, QuickNode, Tenderly, type DebugTraceProvider } from "../src/providers";
 import { Analyzer, Scope } from "../src/core";
 import type { Hex } from "../src/utils";
 
@@ -38,8 +38,8 @@ describe("Reentrancy Analyzer", () => {
 
 	const etherscanWithDb = new Etherscan(etherscanApiKey, Chain.Ethereum, Database.default);
 	const debugProviderWithDb: DebugTraceProvider = quickNodeApiKey
-		? new QuickNodeWithDb(quickNodeApiKey, "Ethereum")
-		: new TenderlyWithDb(tenderlyNodeAccessKeys, "Ethereum", etherscanWithDb.geth);
+		? new QuickNode(quickNodeApiKey, "Ethereum", Database.default)
+		: new Tenderly(tenderlyNodeAccessKeys, "Ethereum", Database.default);
 
 	const testOnCase = (testCase: Readonly<TestCase>) => async () => {
 		const { chain, txHash } = testCase;

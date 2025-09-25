@@ -5,7 +5,7 @@ import { Chain } from "../config/Chain";
 import { Database } from "../database";
 import { toURLSearchParams, Hex, type QueryObject, type NumStr } from "../utils";
 import type { RPC } from "./common";
-import { getCode, getTransactionByHash } from "./integration";
+import { integration } from "./integration";
 
 
 const fetchInstances = new Map<string, typeof fetch>();
@@ -46,17 +46,12 @@ export class Etherscan {
 
 	constructor(
 		apiKey: string | Etherscan.ApiKey,
-		chainId: number = 1,
+		chainId: number = Chain.Ethereum,
 		database?: Database
 	) {
 		this.#chainId = chainId;
 		[this.apiKey, this.#fetch] = getFetch(apiKey);
-		if (database) {
-			this.#db = database;
-			this.geth = new Etherscan.GethWithDb(apiKey, chainId, database);
-		}
-		else
-			this.geth = new Etherscan.Geth(apiKey, chainId);
+		this.geth = new Etherscan.Geth(apiKey, chainId, database);
 	}
 
 	get chainId() {
@@ -340,14 +335,21 @@ export namespace Etherscan {
 
 export namespace Etherscan {
 	export class Geth implements RPC.MultiChainProvider {
+		static readonly #integration = integration(
+			function (this: Geth) { return this.db; },
+			{ defaultChain: function (this: Geth) { return this.chain; } }
+		);
+		readonly db: Database | undefined;
 		readonly #fetch: typeof fetch;
 		readonly apiKey: string;
 
 		constructor(
 			apiKey: string | Etherscan.ApiKey,
-			public chain: number = Chain.Ethereum
+			public chain: number = Chain.Ethereum,
+			database?: Database
 		) {
 			[this.apiKey, this.#fetch] = getFetch(apiKey);
+			this.db = database;
 		}
 
 		protected async request<T>(
@@ -393,6 +395,7 @@ export namespace Etherscan {
 			return this.request<RPC.Block | null>("eth_getBlockByNumber", chain, { tag: blockNumber, boolean: full });
 		}
 
+		@Geth.#integration
 		getTransactionByHash(hash: Hex.TxHash, chain?: number) {
 			return this.request<RPC.Transaction | null>("eth_getTransactionByHash", chain, { txhash: hash });
 		}
@@ -410,6 +413,7 @@ export namespace Etherscan {
 			});
 		}
 
+		@Geth.#integration
 		getCode(address: Hex.Address, tag: RPC.BlockNumber, chain?: number) {
 			tag = this.verifyBlockTag(tag);
 			return this.request<Hex.String>("eth_getCode", chain, { address, tag });
@@ -417,24 +421,6 @@ export namespace Etherscan {
 
 		getStorageAt(address: Hex.Address, position: Hex.String, tag: RPC.BlockNumber, chain?: number) {
 			return this.request<Hex.String>("eth_getStorageAt", chain, { address, position, tag });
-		}
-	}
-
-	export class GethWithDb extends Etherscan.Geth {
-		readonly db: Database;
-
-		constructor(apiKey: string | Etherscan.ApiKey, chain: number = Chain.Ethereum, db?: Database) {
-			super(apiKey, chain);
-			this.db = db ?? Database.default;
-		}
-
-		override getCode(address: Hex.Address, tag: RPC.BlockNumber, chain?: number) {
-			const blockNumber = super.verifyBlockTag(tag);
-			return getCode.call(this, super.getCode.bind(this), address, blockNumber, chain ?? this.chain);
-		}
-
-		override getTransactionByHash(hash: Hex.TxHash, chain?: number) {
-			return getTransactionByHash.call(this, super.getTransactionByHash.bind(this), hash, chain ?? this.chain);
 		}
 	}
 }
