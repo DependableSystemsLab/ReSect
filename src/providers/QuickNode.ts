@@ -41,6 +41,7 @@ const endpoints = {
 	ScrollSepolia: "scroll-testnet",
 	Sonic: "sonic-mainnet",
 	Sophon: "sophon-mainnet",
+	SophonSepolia: "sophon-testnet",
 	World: "worldchain-mainnet",
 	WorldSepolia: "worldchain-sepolia",
 	Unichain: "unichain-mainnet",
