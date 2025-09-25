@@ -4,6 +4,7 @@ import { formatDistanceToNow } from "date-fns/formatDistanceToNow";
 import { Raw } from "typeorm";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import readline from "readline";
 import { Chain as ChainList } from "../src/config/Chain";
 import { etherscanApiKeys, quickNodeApiKey } from "../src/config/credentials";
 import { typeormConfig } from "../src/config/typeorm";
@@ -68,7 +69,6 @@ async function fetchTransactions(
 
 	const bar = new cliProgress.SingleBar({
 		format: `{bar} {percentage}% | ETA: {eta_formatted} | {value}/{total} txs | {message}`,
-		fps: 5,
 		etaBuffer: 20,
 		hideCursor: true,
 		autopadding: true
@@ -84,8 +84,14 @@ async function fetchTransactions(
 			if (existingNumbers.has(blockNumber))
 				continue;
 
-			const block = await rpcProvider.getBlockByNumber(blockNumber, true, chainId);
 			existingNumbers.add(blockNumber);
+			const block = await rpcProvider
+				.getBlockByNumber(blockNumber, true, chainId)
+				.catch(err => {
+					readline.clearLine(process.stdout, 0);
+					readline.cursorTo(process.stdout, 0);
+					console.log(err);
+				});
 			if (block == null)
 				continue;
 
