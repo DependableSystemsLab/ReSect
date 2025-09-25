@@ -32,7 +32,7 @@ async function fetchBlocks() {
 	};
 
 	await txs.forEachAsync(async (tx, idx) => {
-		const transaction = await etherscan.geth
+		const transaction = await etherscan
 			.getTransactionByHash(`0x${tx.hash}`, tx.chainId!)
 			.catch(handleError);
 		if (transaction == null)
@@ -57,7 +57,7 @@ async function fetchBlocks() {
 
 	console.log(`Found ${newBlocks.length} new blocks`);
 	const blocks = await newBlocks.mapAsync(async (block, idx) => {
-		const blockData = await etherscan.geth
+		const blockData = await etherscan
 			.getBlockByNumber(Hex.toString(block.number), false, block.chainId)
 			.catch(handleError);
 		if (blockData == null)
@@ -96,7 +96,7 @@ async function fetchContracts() {
 	}
 
 	const etherscan = new Etherscan(etherscanApiKey);
-	const rpcProvider: RPC.MultiChainProvider = quickNodeApiKey ? new QuickNode(quickNodeApiKey) : etherscan.geth;
+	const rpcProvider: RPC.MultiChainProvider = quickNodeApiKey ? new QuickNode(quickNodeApiKey) : etherscan;
 	const debugProvider = quickNodeApiKey ? new QuickNode(quickNodeApiKey) : new Tenderly(tenderlyNodeAccessKeys);
 	const errors = [];
 	for (const [chainId, contracts] of contractsByChain) {

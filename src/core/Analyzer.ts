@@ -85,7 +85,7 @@ export class Analyzer {
 		readonly debugProvider: DebugTraceProvider,
 		rpcProvider?: RPC.MultiChainProvider
 	) {
-		this.#rpcProvider = rpcProvider ??= etherscan.geth;
+		this.#rpcProvider = rpcProvider ??= etherscan;
 	}
 
 	static #getAllAddresses(callTrace: DebugTrace, set: Set<Hex.Address>) {

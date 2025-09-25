@@ -34,32 +34,36 @@ function getFetch(apiKey: string | Etherscan.ApiKey) {
 	return [key, fetchInst] as const;
 }
 
-export class Etherscan {
+export class Etherscan implements RPC.MultiChainProvider {
+	static readonly #integration = integration(
+		function (this: Etherscan) { return this.#db; },
+		{ defaultChain: function (this: Etherscan) { return this.chain; } }
+	);
 	static readonly BASE_URL = "https://api.etherscan.io/v2/api";
 
-	#chainId: number = 1;
+	#chain: number = 1;
 	readonly #db: Database | undefined;
 	readonly #fetch: typeof fetch;
 
 	readonly apiKey: string;
-	readonly geth: Etherscan.Geth;
 
 	constructor(
 		apiKey: string | Etherscan.ApiKey,
-		chainId: number = Chain.Ethereum,
+		chain: number = Chain.Ethereum,
 		database?: Database
 	) {
-		this.#chainId = chainId;
+		this.#chain = chain;
 		[this.apiKey, this.#fetch] = getFetch(apiKey);
-		this.geth = new Etherscan.Geth(apiKey, chainId, database);
+		this.#db = database;
 	}
 
-	get chainId() {
-		return this.#chainId;
+	get chain() {
+		return this.#chain;
 	}
-	set chainId(chainId: number) {
-		this.#chainId = chainId;
-		this.geth.chain = chainId;
+	set chain(chain: number) {
+		if (!Chain[chain])
+			throw new Error(`Unsupported chain ID: ${chain}`);
+		this.#chain = chain;
 	}
 
 	static #setBlockRange(
@@ -87,7 +91,7 @@ export class Etherscan {
 			module,
 			action,
 			apikey: this.apiKey,
-			chainid: chain ?? this.chainId
+			chainid: chain ?? this.chain
 		});
 		const url = new URL(Etherscan.BASE_URL);
 		url.search = searchParams.toString();
@@ -97,10 +101,12 @@ export class Etherscan {
 				"Accept": "application/json"
 			}
 		});
-		const resp = await response.json() as Etherscan.Response<T>;
 		if (!response.ok)
 			throw new Error(`Etherscan API error: ${response.status} ${response.statusText}`);
-		if (verifyStatus && resp.status !== "1")
+		const resp = await response.json() as Etherscan.Response<T> | RPC.Response<T> | RPC.Error;
+		if ("error" in resp)
+			throw new Error(`Etherscan API error: ${resp.error.message} (${resp.error.slug})`);
+		if (verifyStatus && "status" in resp && resp.status !== "1")
 			throw new Error(`Etherscan API error: ${resp.status} ${resp.message} ${resp.result}`);
 		return resp.result;
 	}
@@ -133,6 +139,48 @@ export class Etherscan {
 		return result;
 	}
 
+	protected verifyBlockTag(tag: RPC.BlockNumber): "earliest" | "latest" | "pending" {
+		if (tag == "earliest" || tag == "latest" || tag == "pending")
+			return tag;
+		throw new Error(`Unsupported block tag: ${tag}`);
+	}
+
+	blockNumber(chain?: number) {
+		return this.#request<Hex.String>("proxy", "eth_blockNumber", chain);
+	}
+
+	getBlockByNumber(blockNumber: RPC.BlockNumber, full: boolean, chain?: number) {
+		return this.#request<RPC.Block | null>("proxy", "eth_getBlockByNumber", chain, { tag: blockNumber, boolean: full });
+	}
+
+	@Etherscan.#integration
+	getTransactionByHash(hash: Hex.TxHash, chain?: number) {
+		return this.#request<RPC.Transaction | null>("proxy", "eth_getTransactionByHash", chain, { txhash: hash });
+	}
+
+	call(request: RPC.CallRequest, tag: RPC.BlockNumber, chain?: number) {
+		tag = this.verifyBlockTag(tag);
+		return this.#request<Hex.String>("proxy", "eth_call", chain, {
+			from: request.from,
+			to: request.to,
+			data: request.input,
+			gas: request.gas,
+			gasPrice: request.gasPrice,
+			value: request.value,
+			tag
+		});
+	}
+
+	@Etherscan.#integration
+	getCode(address: Hex.Address, tag: RPC.BlockNumber, chain?: number) {
+		tag = this.verifyBlockTag(tag);
+		return this.#request<Hex.String>("proxy", "eth_getCode", chain, { address, tag });
+	}
+
+	getStorageAt(address: Hex.Address, position: Hex.String, tag: RPC.BlockNumber, chain?: number) {
+		return this.#request<Hex.String>("proxy", "eth_getStorageAt", chain, { address, position, tag });
+	}
+
 	async getBlockNumberByTimestamp(timestamp?: number, closest: "before" | "after" = "before", chain?: number): Promise<number | null> {
 		timestamp ??= Math.floor(Date.now() / 1000);
 		if (timestamp < 0)
@@ -161,7 +209,7 @@ export class Etherscan {
 	async getContractCreation(contractAddresses: Arrayable<Hex.String>, chain?: number): Promise<(Etherscan.ContractCreation | null)[]> {
 		if (!Array.isArray(contractAddresses))
 			contractAddresses = [contractAddresses];
-		chain ??= this.#chainId;
+		chain ??= this.#chain;
 		const addresses = contractAddresses.map(Hex.verifyAddress);
 		const results = new Map<Hex.Address, Etherscan.ContractCreation | null>();
 		if (this.#db) {
@@ -202,7 +250,7 @@ export class Etherscan {
 			const existing = await this.#db.filterTxHashes(txHashes);
 			if (existing.length < txHashes.length) {
 				const missing = Array.difference(txHashes, existing);
-				const txs = await missing.mapAsync(txHash => this.geth.getTransactionByHash(txHash, chain));
+				const txs = await missing.mapAsync(txHash => this.getTransactionByHash(txHash, chain));
 				for (let i = 0; i < txs.length; i++) {
 					if (txs[i] == null)
 						throw new Error(`Transaction ${missing[i]} not found`);
@@ -210,9 +258,9 @@ export class Etherscan {
 				await this.#db.saveTransactions(txs as RPC.Transaction[], chain);
 			}
 			if (eoas.length > 0)
-				await this.#db.saveEOAs(eoas, chain ?? this.#chainId);
+				await this.#db.saveEOAs(eoas, chain ?? this.#chain);
 			if (newCreations.length > 0)
-				await this.#db.saveContracts(newCreations, chain ?? this.#chainId);
+				await this.#db.saveContracts(newCreations, chain ?? this.#chain);
 		}
 		return addresses.map(a => results.get(a)!);
 	}
@@ -330,97 +378,5 @@ export namespace Etherscan {
 		logIndex: Hex.String;
 		transactionHash: Hex.TxHash;
 		transactionIndex: Hex.String;
-	}
-}
-
-export namespace Etherscan {
-	export class Geth implements RPC.MultiChainProvider {
-		static readonly #integration = integration(
-			function (this: Geth) { return this.db; },
-			{ defaultChain: function (this: Geth) { return this.chain; } }
-		);
-		readonly db: Database | undefined;
-		readonly #fetch: typeof fetch;
-		readonly apiKey: string;
-
-		constructor(
-			apiKey: string | Etherscan.ApiKey,
-			public chain: number = Chain.Ethereum,
-			database?: Database
-		) {
-			[this.apiKey, this.#fetch] = getFetch(apiKey);
-			this.db = database;
-		}
-
-		protected async request<T>(
-			action: string,
-			chain?: number,
-			params?: QueryObject
-		): Promise<T> {
-			params ??= {};
-			const searchParams = toURLSearchParams({
-				...params,
-				module: "proxy",
-				action,
-				apikey: this.apiKey,
-				chainid: chain ?? this.chain
-			});
-			const url = new URL(Etherscan.BASE_URL);
-			url.search = searchParams.toString();
-			const response = await this.#fetch(url.href, {
-				method: "GET",
-				headers: {
-					"Accept": "application/json"
-				}
-			});
-			const resp = await response.json() as RPC.Response<T> | RPC.Error;
-			if (!response.ok)
-				throw new Error(`Etherscan API error: ${response.status} ${response.statusText}`);
-			if ("error" in resp)
-				throw new Error(`Etherscan API error: ${resp.error.message} (${resp.error.slug})`);
-			return resp.result;
-		}
-
-		protected verifyBlockTag(tag: RPC.BlockNumber): "earliest" | "latest" | "pending" {
-			if (tag == "earliest" || tag == "latest" || tag == "pending")
-				return tag;
-			throw new Error(`Unsupported block tag: ${tag}`);
-		}
-
-		blockNumber(chain?: number) {
-			return this.request<Hex.String>("eth_blockNumber", chain);
-		}
-
-		getBlockByNumber(blockNumber: RPC.BlockNumber, full: boolean, chain?: number) {
-			return this.request<RPC.Block | null>("eth_getBlockByNumber", chain, { tag: blockNumber, boolean: full });
-		}
-
-		@Geth.#integration
-		getTransactionByHash(hash: Hex.TxHash, chain?: number) {
-			return this.request<RPC.Transaction | null>("eth_getTransactionByHash", chain, { txhash: hash });
-		}
-
-		call(request: RPC.CallRequest, tag: RPC.BlockNumber, chain?: number) {
-			tag = this.verifyBlockTag(tag);
-			return this.request<Hex.String>("eth_call", chain, {
-				from: request.from,
-				to: request.to,
-				data: request.input,
-				gas: request.gas,
-				gasPrice: request.gasPrice,
-				value: request.value,
-				tag
-			});
-		}
-
-		@Geth.#integration
-		getCode(address: Hex.Address, tag: RPC.BlockNumber, chain?: number) {
-			tag = this.verifyBlockTag(tag);
-			return this.request<Hex.String>("eth_getCode", chain, { address, tag });
-		}
-
-		getStorageAt(address: Hex.Address, position: Hex.String, tag: RPC.BlockNumber, chain?: number) {
-			return this.request<Hex.String>("eth_getStorageAt", chain, { address, position, tag });
-		}
 	}
 }

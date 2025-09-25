@@ -49,7 +49,7 @@ async function fetchTransactions(
 
 	const rpcProvider = new RPC.ExtendedProvider(
 		provider === "Etherscan"
-			? new Etherscan(etherscanApiKey, chainId).geth
+			? new Etherscan(etherscanApiKey, chainId)
 			: new QuickNode(quickNodeApiKey!, chainId)
 	);
 
@@ -161,7 +161,7 @@ const cliParser = yargs()
 		if (value?.match(/^\d+$/))
 			return parseInt(value);
 		if (value === undefined)
-			return type === "start" ? 0 : Hex.toNumber(await etherscan.geth.blockNumber());
+			return type === "start" ? 0 : Hex.toNumber(await etherscan.blockNumber());
 		const date = Date.parse(value);
 		if (isNaN(date))
 			throw new Error(`Invalid date: ${value}`);
