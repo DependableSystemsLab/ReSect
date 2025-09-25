@@ -40,6 +40,9 @@ export class Block {
 	@Column("integer")
 	size?: number;
 
+	@Column("integer", { name: "transaction_count", nullable: true })
+	transactionCount?: number | null;
+
 	@Type(() => Chain)
 	@ManyToOne(
 		() => Chain,

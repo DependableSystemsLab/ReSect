@@ -14,6 +14,7 @@ export namespace JsonRpcConverter {
 			entity.baseFeePerGas = Hex.toBigInt(block.baseFeePerGas);
 		entity.miner = Hex.removePrefix(block.miner);
 		entity.size = Hex.toNumber(block.size);
+		entity.transactionCount = block.transactions.length;
 		return entity;
 	}
 
