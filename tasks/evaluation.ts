@@ -47,7 +47,11 @@ const errorCheckers: Record<string, (err: any) => boolean | Promisable<string | 
 		return err.message === "fetch failed";
 	},
 	database(err) {
-		return err instanceof QueryFailedError;
+		if (!(err instanceof QueryFailedError))
+			return false;
+		delete (err as any).parameters;
+		delete (err as any).driverError;
+		return err;
 	}
 };
 
@@ -121,24 +125,25 @@ async function evaluate(
 		detected: 0,
 		passed: 0,
 		mismatch: { total: 0 } as Record<string, number>,
-		positive: [] as Hex.TxHash[],
+		positive: new Array<{ hash: Hex.TxHash, result: AnalysisResult; }>(),
 		errors: { total: 0 } as Record<string, number>,
 	};
 	const bar = new cliProgress.SingleBar({
-		format: `{bar} {percentage}% | ETA: {eta_formatted} | {value}/{total} txs | {message}`,
+		format: `{bar} {percentage}% | Time: {duration_formatted} | {value}/{total} txs | {speed} txs/s | {message}`,
 		fps: 5,
-		etaBuffer: Math.max(20, Math.floor(10 * Math.log10(txns.length))),
 		hideCursor: true,
-		autopadding: true,
-		clearOnComplete: true
+		autopadding: true
 	}, cliProgress.Presets.shades_classic);
-	const log = (...args: any[]) => {
-		readline.clearLine(process.stdout, 0);
-		readline.cursorTo(process.stdout, 0);
-		console.log(...args);
+	const width = Math.floor(Math.log10(txns.length)) + 1;
+	const log = (msg: string, index?: number, resetCursor = true) => {
+		if (resetCursor) {
+			readline.clearLine(process.stdout, 0);
+			readline.cursorTo(process.stdout, 0);
+		}
+		console.log(index === undefined ? msg : chalk.grey`[${(index + 1).toString().padStart(width, " ")} / ${txns.length}] ` + msg);
 	};
 
-	const fnTest = async (txn: FnTx) => {
+	const fnTest = async (txn: FnTx, index: number) => {
 		const analyzer = new Analyzer(etherscan, debugProvider);
 		const hash = `0x${txn.hash}` as const;
 		const attack = txn.attack!;
@@ -161,13 +166,13 @@ async function evaluate(
 			}
 		}
 		catch (err) {
-			log(chalk.red`Analysis Error: ${txInfo}`);
+			log(chalk.red`Analysis Error: ${txInfo}`, index);
 			await handleError(err, stats.errors);
 			return;
 		}
 
 		if (!detected) {
-			log(chalk.yellow`No attack detected for ${txInfo}`);
+			log(chalk.yellow`No attack detected for ${txInfo}`, index);
 			return;
 		}
 		++stats.detected;
@@ -186,10 +191,10 @@ async function evaluate(
 		for (const key in expected) {
 			if (actual[key] !== expected[key]) {
 				if (equal) {
-					log(chalk.yellow`Mismatched analysis for ${txInfo}:`);
+					log(chalk.yellow`Mismatched analysis for ${txInfo}:`, index);
 					equal = false;
 				}
-				log(chalk.yellow`  Expected ${key} to be ${expected[key]}, but got ${actual[key]}`);
+				console.log(chalk.yellow`  Expected ${key} to be ${expected[key]}, but got ${actual[key]}`);
 				stats.mismatch[key] ??= 0;
 				++stats.mismatch[key];
 			}
@@ -200,10 +205,9 @@ async function evaluate(
 			++stats.passed;
 	};
 
-	const fpTest = async (txn: FpTx) => {
+	const fpTest = async (txn: FpTx, index: number) => {
 		const analyzer = new Analyzer(etherscan, debugProvider);
 		const hash = `0x${txn.hash}` as const;
-		bar.update({ message: chalk.cyan`${hash} (${txn.chain.name})` });
 
 		let result: AnalysisResult | undefined;
 		try {
@@ -211,60 +215,87 @@ async function evaluate(
 				break;
 		}
 		catch (err) {
-			log(chalk.red`Analysis Error: ${hash}`);
+			log(chalk.red`Analysis Error: ${hash}`, index);
 			await handleError(err, stats.errors);
 			return;
 		}
 
 		if (result) {
-			stats.positive.push(hash);
-			log(chalk.yellow`Positive detected: ${hash}`);
-			console.log(result.toString());
+			stats.positive.push({ hash, result });
+			log(chalk.yellow`Positive detected: ${hash}`, index);
 		}
+		bar.update({ message: `Reentrancy: ${stats.positive.length}` });
 	};
 
-	bar.start(txns.length, 0, { message: chalk.cyan`Running ${txns.length} tests...` });
+	bar.start(txns.length, 0);
+	const startTime = Date.now();
+	let completed = 0;
+	const finalize = () => {
+		++completed;
+		bar.update(completed, { speed: (completed / ((Date.now() - startTime) / 1000)).toFixed(1) });
+	};
+	process.on("SIGINT", () => {
+		bar.stop();
+		printResult();
+		process.exit(0);
+	});
 	await txns.forEachAsync(
 		type === "fn"
-			? txn => fnTest(txn as FnTx).finally(() => bar.increment())
-			: txn => fpTest(txn as FpTx).finally(() => bar.increment()),
+			? (txn, idx) => fnTest(txn as FnTx, idx).finally(finalize)
+			: (txn, idx) => fpTest(txn as FpTx, idx).finally(finalize),
 		txns,
 		{ maxConcurrency: concurrency }
 	);
+	const endTime = Date.now();
 	bar.stop();
 
-	console.log(chalk.white`\nEvaluation Summary:`);
-	const logStats = (color: chalk.Chalk, label: string, count: number, total: number) =>
-		console.log(color`${label}: ${count}/${total} (${(count / total * 100).toFixed(2)}%)`);
-	if (type === "fp") {
-		const total = txns.length - stats.errors.total;
-		logStats(chalk.green, "Negatives", total - stats.positive.length, total);
-		if (stats.positive.length > 0) {
-			logStats(chalk.yellow, "Positives", stats.positive.length, total);
-			for (const hash of stats.positive)
-				console.log(chalk.yellow`  ${hash}`);
+	function printResult(timestamp: number = Date.now()) {
+		log(chalk.white`Evaluated ${completed} transactions in ${((timestamp - startTime) / 1000).toFixed(1)}s`);
+		log(chalk.white`Evaluation Summary:`);
+		const logStats = (color: chalk.Chalk, label: string, count: number, total: number) =>
+			log(color`${label}: ${count}/${total} (${(count / total * 100).toFixed(2)}%)`);
+		if (type === "fp") {
+			const total = completed - stats.errors.total;
+			const positive = stats.positive.length;
+			logStats(chalk.green, "Negatives", total - positive, total);
+			if (positive > 0) {
+				logStats(chalk.yellow, "Positives", positive, total);
+				const scopeCount = new Map<Scope, number>();
+				const entryPointCount = new Map<ReentrancyAttack.EntryPoint, number>();
+				for (const { result } of stats.positive) {
+					scopeCount.set(result.scope, (scopeCount.get(result.scope) ?? 0) + 1);
+					new Set(result.entrances).forEach(e => {
+						entryPointCount.set(e.type, (entryPointCount.get(e.type) ?? 0) + 1);
+					});
+				}
+				for (const [scope, count] of scopeCount)
+					logStats(chalk.yellow, `  Scope ${Scope[scope]}`, count, positive);
+				for (const [entryPoint, count] of entryPointCount)
+					logStats(chalk.yellow, `  EntryPoint ${entryPoint}`, count, positive);
+			}
 		}
-	}
-	else {
-		logStats(chalk.cyan, `Detection`, stats.detected, txns.length - stats.errors.total);
-		logStats(chalk.green, `Analysis`, stats.passed, stats.detected);
-		const keys = Object.keys(stats.mismatch);
+		else {
+			logStats(chalk.cyan, `Detection`, stats.detected, completed - stats.errors.total);
+			logStats(chalk.green, `Analysis`, stats.passed, stats.detected);
+			const keys = Object.keys(stats.mismatch);
+			if (keys.length > 1) {
+				logStats(chalk.yellow, `Mismatches`, stats.mismatch.total, stats.detected);
+				for (const key of keys) {
+					if (key !== "total")
+						logStats(chalk.yellow, `  ${key}`, stats.mismatch[key], stats.detected);
+				}
+			}
+		}
+		const keys = Object.keys(stats.errors);
 		if (keys.length > 1) {
-			logStats(chalk.yellow, `Mismatches`, stats.mismatch.total, stats.detected);
+			logStats(chalk.red, `Errors`, stats.errors.total, completed);
 			for (const key of keys) {
 				if (key !== "total")
-					logStats(chalk.yellow, `  ${key}`, stats.mismatch[key], stats.detected);
+					logStats(chalk.red, `  ${key}`, stats.errors[key], completed);
 			}
 		}
 	}
-	const keys = Object.keys(stats.errors);
-	if (keys.length > 1) {
-		logStats(chalk.red, `Errors`, stats.errors.total, txns.length);
-		for (const key of keys) {
-			if (key !== "total")
-				logStats(chalk.red, `  ${key}`, stats.errors[key], txns.length);
-		}
-	}
+	printResult(endTime);
 }
 
 const cliParser = yargs()
