@@ -221,20 +221,22 @@ async function evaluate(
 			return;
 		}
 
-		if (!result)
-			return;
-		stats.positive.push({ hash, result });
-		log(chalk.yellow`Positive detected: ${hash}`, index);
-		log(result.toString());
-		if (!txn.hasTags(Transaction.Tags.Reentrancy)) {
-			txn.addTags(Transaction.Tags.Reentrancy);
+		const tags = txn.tags ?? 0;
+		txn.setTags(Transaction.Tags.Reentrancy, result !== undefined);
+		if (txn.tags !== tags) {
 			await txRepo.update(txn.hash, { tags: txn.tags })
 				.catch(err => {
 					log(chalk.red`Failed to update tags for ${hash}`, index);
 					console.log(err);
 				});
 		}
-		bar.update({ message: `Reentrancy: ${stats.positive.length}` });
+
+		if (result) {
+			stats.positive.push({ hash, result });
+			log(chalk.yellow`Positive detected: ${hash}`, index);
+			log(result.toString());
+			bar.update({ message: `Reentrancy: ${stats.positive.length}` });
+		}
 	};
 
 	bar.start(txns.length, 0);

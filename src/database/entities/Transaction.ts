@@ -92,14 +92,17 @@ export class Transaction {
 			this.hash = Hex.removePrefix(txHash);
 	}
 
-	hasTags(tag: Transaction.Tags): boolean {
-		return (this.tags ?? 0 & tag) === tag;
+	hasTags(tags: Transaction.Tags): boolean {
+		return ((this.tags ?? 0) & tags) === tags;
 	}
-	addTags(tag: Transaction.Tags): Transaction.Tags {
-		return this.tags = (this.tags ?? 0) | tag;
+	addTags(tags: Transaction.Tags): Transaction.Tags {
+		return this.tags = (this.tags ?? 0) | tags;
 	}
-	removeTags(tag: Transaction.Tags): Transaction.Tags {
-		return this.tags = (this.tags ?? 0) & ~tag;
+	removeTags(tags: Transaction.Tags): Transaction.Tags {
+		return this.tags = (this.tags ?? 0) & ~tags;
+	}
+	setTags(tags: Transaction.Tags, value: boolean): Transaction.Tags {
+		return this.tags = value ? this.addTags(tags) : this.removeTags(tags);
 	}
 }
 
