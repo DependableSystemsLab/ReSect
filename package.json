@@ -6,8 +6,8 @@
 	"scripts": {
 		"build": "tsc -b tsconfig.build.json",
 		"test": "jest",
-		"evaluate:first": "dotenvx run -- tsx tasks/evaluation.ts --size=first",
-		"evaluate:all": "dotenvx run -- tsx tasks/evaluation.ts --size=all",
+		"evaluate:first": "dotenvx run -- tsx tasks/evaluation.ts --total=first",
+		"evaluate:all": "dotenvx run -- tsx tasks/evaluation.ts --total=all",
 		"evaluate:fp": "dotenvx run -- tsx tasks/evaluation.ts --type=fp",
 		"fix-database": "dotenvx run -- tsx tasks/database-fix.ts",
 		"create-fp-dataset": "dotenvx run -- tsx tasks/fp-dataset-creation.ts"

@@ -6,7 +6,7 @@ import { hideBin } from "yargs/helpers";
 import readline from "node:readline";
 import { Chain } from "../src/config/Chain";
 import { etherscanApiKeys, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
-import { Database, ReentrancyAttack, Transaction } from "../src/database";
+import { CallTrace, Database, ReentrancyAttack, Transaction } from "../src/database";
 import { type DebugTraceProvider, Etherscan, QuickNode, Tenderly } from "../src/providers";
 import { Analyzer, Scope, TraceNotFoundError, type AnalysisResult } from "../src/core";
 import type { Hex } from "../src/utils";
@@ -330,16 +330,16 @@ const cliParser = yargs()
 			return Chain[value as keyof typeof Chain];
 		}
 	})
-	.option("size", {
+	.option("total", {
 		type: "string",
 		default: "all",
-		description: "Number of transactions to evaluate. Use 'all' for all transactions, or 'first' in case of false negatives to use only the first transaction of each attack",
+		description: "Total number of transactions to evaluate. Use 'all' for all transactions, or 'first' in case of false negatives to use only the first transaction of each attack",
 		coerce(value: string) {
 			if (value === "all" || value === "first")
 				return value;
 			const n = Number.parseInt(value);
 			if (!Number.isSafeInteger(n))
-				throw new Error(`Invalid size: ${value}`);
+				throw new Error(`Invalid total: ${value}`);
 			return n;
 		}
 	})
@@ -359,15 +359,64 @@ const cliParser = yargs()
 		default: true,
 		description: "Use database for analysis"
 	})
+	.option("only-with-cache", {
+		type: "boolean",
+		default: false,
+		description: "Only evaluate transactions that have cached traces in the database"
+	})
+	.option("only-without-cache", {
+		type: "boolean",
+		default: false,
+		description: "Only evaluate transactions that do not have cached traces in the database"
+	})
+	.option("only-positive", {
+		type: "boolean",
+		default: false,
+		description: "Only evaluate transactions that are classified as positive"
+	})
+	.check(argv => {
+		if (argv.type === "fp" && argv.total === "first")
+			return "Option --total=first is not valid for false positive evaluation";
+		if (argv.type === "fn" && typeof argv.total === "number")
+			return "Option --total must be either 'all' or 'first' for false negative evaluation";
+		if (argv["only-with-cache"] && argv["only-without-cache"])
+			return "Options --only-with-cache and --only-without-cache cannot be used together";
+		return true;
+	})
 	.help()
 	.alias("help", "h");
 
+type CliArg = Awaited<typeof cliParser.argv>;
+
+async function filterCollection<T extends Transaction>(
+	collection: T[],
+	argv: Pick<CliArg, "onlyWithCache" | "onlyWithoutCache" | "onlyPositive">
+): Promise<typeof collection> {
+	if (argv.onlyWithCache || argv.onlyWithoutCache) {
+		const traceRepo = await Database.default.getRepository(CallTrace);
+		const hashColumn = traceRepo.metadata.findColumnWithPropertyName("txHash")!;
+		const cached = await traceRepo.createQueryBuilder("t")
+			.select(`t."${hashColumn.databaseName}"`, "hash")
+			.distinct(true)
+			.getRawMany<{ hash: CallTrace["txHash"]; }>()
+			.then(rows => new Set(rows.map(r => r.hash)));
+		collection = collection.filter(
+			argv.onlyWithCache
+				? tx => cached.has(tx.hash)
+				: tx => !cached.has(tx.hash)
+		);
+	}
+	if (argv.onlyPositive)
+		collection = collection.filter(tx => tx.hasTags(Transaction.Tags.Reentrancy));
+	return collection;
+}
+
 (async () => {
-	const { type, chain: chainId, size, ...argv } = await cliParser.parseAsync(hideBin(process.argv));
+	const { type, chain: chainId, total, ...argv } = await cliParser.parseAsync(hideBin(process.argv));
 	if (type === "fn") {
 		const txns = await Database.default.getAttackTransactions(undefined, Transaction.Tags.Exploit);
 		let collection: Transaction.WithAttack[];
-		if (size === "all")
+		if (total === "all")
 			collection = txns;
 		else {
 			const attackTxns = new Map<number, typeof txns[0]>();
@@ -382,12 +431,12 @@ const cliParser = yargs()
 		}
 		if (chainId !== undefined)
 			collection = collection.filter(tx => tx.chainId === chainId);
+		collection = await filterCollection(collection, argv);
 		await evaluate("fn", collection, argv.database, argv.concurrency);
 	}
 	else {
-		if (size === "first")
-			throw new Error(`Option --size=first is not valid for false positive evaluation`);
-		const collection = await Database.default.getFpEvaluationTransactions(chainId, size === "all" ? undefined : size, argv.skip);
+		let collection = await Database.default.getFpEvaluationTransactions(chainId, total === "all" ? undefined : total as number, argv.skip);
+		collection = await filterCollection(collection, argv);
 		await evaluate("fp", collection, argv.database, argv.concurrency);
 	}
 	process.exit(0);

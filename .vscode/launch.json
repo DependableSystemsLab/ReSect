@@ -28,7 +28,7 @@
 			"name": "pnpm: evaluate:fp",
 			"request": "launch",
 			"preLaunchTask": "pnpm: build",
-			"runtimeArgs": ["run", "evaluate:fp", "--chain=1", "--size=100"],
+			"runtimeArgs": ["run", "evaluate:fp", "--chain=1", "--total=100"],
 			"runtimeExecutable": "pnpm",
 			"skipFiles": ["<node_internals>/**"],
 			"type": "node",

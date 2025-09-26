@@ -203,7 +203,7 @@ export class Database {
 		return txns as Transaction.WithAttack[];
 	}
 
-	async getFpEvaluationTransactions(chainId?: number, take?: number, skip?: number) {
+	async getFpEvaluationTransactions(chainId?: number, total?: number, skip?: number) {
 		const repo = await this.getRepository(Transaction);
 		const txns = await repo.find({
 			where: {
@@ -211,7 +211,7 @@ export class Database {
 				tags: Raw(alias => `(${alias} & ${Transaction.Tags.FPDataset}) != 0`)
 			},
 			skip,
-			take,
+			take: skip !== undefined && total !== undefined ? total - skip : total,
 			order: { blockNumber: "ASC", blockIndex: "ASC" }
 		});
 		return await this.#setChains(txns);
