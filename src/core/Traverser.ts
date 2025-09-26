@@ -12,7 +12,7 @@ export class Traverser<T extends MinimalTrace = MinimalTrace> {
 
 	constructor(public readonly infos: Map<string, AddressInfo>) { }
 
-	*#traverse(trace: DebugTrace<T>, senderContractDepth: number): Generator<number[]> {
+	*#traverse(trace: DebugTrace<T>, senderContractDepth: number, proxy: boolean): Generator<number[]> {
 		const to = this.infos.get(trace.to)!;
 		if (!to.isContract)
 			return;
@@ -22,7 +22,7 @@ export class Traverser<T extends MinimalTrace = MinimalTrace> {
 		if (fromIsSender && trace.type === CallType.STATICCALL)
 			return;
 
-		const reentrancyDetected = senderContractDepth !== -1
+		const reentrancyDetected = senderContractDepth !== -1 && !proxy
 			&& this.beforeCount.enumerate().some(([addr, count]) => count > 0 && inSameGroup(addr, to));
 		if (!(trace.calls?.length)) {
 			if (reentrancyDetected)
@@ -58,7 +58,12 @@ export class Traverser<T extends MinimalTrace = MinimalTrace> {
 		let reentrancyDetectedInCalls = false;
 		for (let i = 0; i < trace.calls.length; i++) {
 			this.currentStack.push(i);
-			for (const result of this.#traverse(trace.calls[i], newSenderContractDepth)) {
+			const nextTrace = trace.calls[i];
+			// Some proxies don't follow EIP-1967/1822, so this should be a more robust check.
+			// TODO: But could this lead to false negative?
+			const isProxy = nextTrace.type === CallType.DELEGATECALL
+				&& trace.input.length === nextTrace.input.length && trace.input === nextTrace.input;
+			for (const result of this.#traverse(nextTrace, newSenderContractDepth, isProxy)) {
 				reentrancyDetectedInCalls = true;
 				yield result;
 			}
@@ -80,6 +85,6 @@ export class Traverser<T extends MinimalTrace = MinimalTrace> {
 	*traverse(callTrace: DebugTrace<T>): Generator<number[]> {
 		this.#clear();
 		this.sender = this.infos.get(callTrace.from)! as EOAInfo;
-		yield* this.#traverse(callTrace, -1);
+		yield* this.#traverse(callTrace, -1, false);
 	}
 }

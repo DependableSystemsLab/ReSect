@@ -95,6 +95,13 @@ describe("Reentrancy Analyzer", () => {
 		readonly: false
 	}));
 
+	test("Proxy Contract Exclusion", testOnCase({
+		isReentrancy: false,
+		name: "Some Random Tx",
+		chain: "Base",
+		txHash: "0x9d0a27afc2aa374222914da9c4573e32dbcaacd89ada60af21e59d13927083b3"
+	}));
+
 	test("Scope: Cross Function", testOnCase({
 		isReentrancy: true,
 		name: "TrustSwap",
