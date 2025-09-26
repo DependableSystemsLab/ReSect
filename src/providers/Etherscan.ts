@@ -24,8 +24,11 @@ function getFetch(apiKey: string | Etherscan.ApiKey) {
 				return res.clone().json().then(json => {
 					if (json.error != undefined)
 						return true;
-					if ("status" in json && json.status !== "1")
-						return true;
+					if ("status" in json && json.status !== "1") {
+						const res = json.result;
+						if (typeof res === "string" && res.includes("rate limit reached"))
+							return true;
+					}
 				});
 			}
 		});
@@ -101,20 +104,22 @@ export class Etherscan implements RPC.MultiChainProvider {
 		});
 		const url = new URL(Etherscan.BASE_URL);
 		url.search = searchParams.toString();
-		const response = await fetchFunc(url.href, {
+		const res = await fetchFunc(url.href, {
 			method: "GET",
 			headers: {
 				"Accept": "application/json"
 			}
 		});
-		if (!response.ok)
-			throw new Error(`Etherscan API error: ${response.status} ${response.statusText}`);
-		const resp = await response.json() as Etherscan.Response<T> | RPC.Response<T> | RPC.Error;
-		if ("error" in resp)
-			throw new Error(`Etherscan API error: ${resp.error.message} (${resp.error.slug})`);
-		if (verifyStatus && "status" in resp && resp.status !== "1")
-			throw new Error(`Etherscan API error: ${resp.status} ${resp.message} ${resp.result}`);
-		return resp.result;
+		if (!res.ok) {
+			const error = await res.text();
+			throw new Etherscan.Error(`${res.status} ${res.statusText}`, url, res.status, error);
+		}
+		const result = await res.json() as Etherscan.Response<T> | RPC.Response<T> | RPC.Error;
+		if ("error" in result)
+			throw new Etherscan.Error(`${result.error.message} (${result.error.slug})`, url, res.status, result.error);
+		if (verifyStatus && "status" in result && result.status !== "1")
+			throw new Etherscan.Error(`${result.status} ${result.message} ${result.result}`, url, res.status, result);
+		return result.result;
 	}
 
 	async #requestWithPagination<T extends unknown[]>(
@@ -323,6 +328,19 @@ export namespace Etherscan {
 		[Etherscan.APITier.Professional]: [30, 1_000_000],
 		[Etherscan.APITier.ProPlus]: [30, 1_500_000]
 	};
+
+	export class Error extends globalThis.Error {
+		readonly url: string;
+		readonly status: number;
+		readonly details?: any;
+
+		constructor(message: string, url: string | URL, status: number, details?: any) {
+			super(`Etherscan API error: ${message}`);
+			this.url = typeof url === "string" ? url : url.href;
+			this.status = status;
+			this.details = details;
+		}
+	}
 
 	export type BlockRange = [startBlock?: number, endBlock?: number] | "all";
 	export type Pagination = [page?: number, offset?: number] | "all";
