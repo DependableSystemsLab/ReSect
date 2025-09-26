@@ -1,4 +1,5 @@
 import "basic-type-extensions";
+import type { RPC } from "../providers/common";
 import { CallType, Counter, type DebugTrace, type MinimalTrace } from "../utils";
 import type { AddressInfo, EOAInfo } from "./types";
 import { inSameGroup } from "./functions";
@@ -13,6 +14,8 @@ export class Traverser<T extends MinimalTrace = MinimalTrace> {
 	constructor(public readonly infos: Map<string, AddressInfo>) { }
 
 	*#traverse(trace: DebugTrace<T>, senderContractDepth: number, proxy: boolean): Generator<number[]> {
+		if (trace.to === undefined || (trace as unknown as RPC.Debug.Trace).error != undefined)
+			return;
 		const to = this.infos.get(trace.to)!;
 		if (!to.isContract)
 			return;

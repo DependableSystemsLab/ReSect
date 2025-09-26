@@ -90,7 +90,7 @@ export namespace TraceConverter {
 
 	function _setEntityFromTrace(entity: Entity, trace: RPC.Debug.TraceInfo): Entity {
 		entity.from = Hex.removePrefix(trace.from);
-		entity.to = Hex.removePrefix(trace.to);
+		entity.to = trace.to === undefined ? null : Hex.removePrefix(trace.to);
 		entity.type = trace.type;
 		entity.inputAsHex = trace.input;
 		entity.gas = Hex.toBigInt(trace.gas);
@@ -129,7 +129,7 @@ export namespace TraceConverter {
 	function* _debugTraceToEntities(
 		debugTrace: RPC.Debug.Trace,
 		entity: Entity,
-		ctx: { index: number }
+		ctx: { index: number; }
 	): Generator<Entity> {
 		_setEntityFromTrace(entity, debugTrace);
 		yield entity;

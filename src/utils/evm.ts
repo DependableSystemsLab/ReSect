@@ -12,7 +12,7 @@ export enum CallType {
 
 export interface MinimalTrace {
 	from: Hex.Address;
-	to: Hex.Address;
+	to?: Hex.Address;
 	type: CallType;
 	input: Hex.String;
 	output?: Hex.String;

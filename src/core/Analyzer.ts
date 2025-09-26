@@ -88,18 +88,19 @@ export class Analyzer {
 		this.#rpcProvider = rpcProvider ??= etherscan;
 	}
 
-	static #getAllAddresses(callTrace: DebugTrace, set: Set<Hex.Address>) {
-		set.add(callTrace.from);
-		set.add(callTrace.to);
-		if (callTrace.calls?.length) {
-			for (const call of callTrace.calls)
+	static #getAllAddresses(trace: DebugTrace, set: Set<Hex.Address>) {
+		set.add(trace.from);
+		if (trace.to !== undefined)
+			set.add(trace.to);
+		if (trace.calls?.length) {
+			for (const call of trace.calls)
 				this.#getAllAddresses(call, set);
 		}
 	}
 
-	static getAllAddresses(callTrace: DebugTrace): Set<Hex.Address> {
+	static getAllAddresses(trace: DebugTrace): Set<Hex.Address> {
 		const set = new Set<Hex.Address>();
-		this.#getAllAddresses(callTrace, set);
+		this.#getAllAddresses(trace, set);
 		return set;
 	}
 
@@ -246,8 +247,10 @@ export class Analyzer {
 		for (const hash of factoryCreationTxns) {
 			const trace = this.#debugTraces.get(hash)!;
 			const createTraces = Analyzer.findCreateTraces(trace);
-			for (const createTrace of createTraces)
-				creationTraces.set(createTrace.to, createTrace);
+			for (const createTrace of createTraces) {
+				if (createTrace.to !== undefined)
+					creationTraces.set(createTrace.to, createTrace);
+			}
 		}
 		const authorFactories = new Map<Hex.Address, Hex.Address>();
 		for (const contract of contracts) {
@@ -264,7 +267,7 @@ export class Analyzer {
 			if (cur.caller === undefined) // Author is the sender of the current transaction
 				info.author = cur.from;
 			else { // Author is the contract factory
-				const factoryInfo = this.#addrInfos.get(cur.to) as ContractInfo | undefined;
+				const factoryInfo = this.#addrInfos.get(cur.to!) as ContractInfo | undefined;
 				if (factoryInfo?.author)
 					info.author = factoryInfo.author;
 				else
@@ -294,13 +297,13 @@ export class Analyzer {
 	#annotateTrace(callTrace: AnnotatedTrace, stack: number[]): AnnotatedTrace[] {
 		const traces = toTraceList(callTrace, stack);
 		const lastTrace = traces.last();
-		this.#victimInfo = this.#addrInfos.get(lastTrace.to)! as ContractInfo;
+		this.#victimInfo = this.#addrInfos.get(lastTrace.to!)! as ContractInfo;
 		let searchTargetIsAttacker = true;
 		let lastCurrentPartyTrace = lastTrace;
 		for (let i = traces.length - 2; i >= 0; i--) {
 			const trace = traces[i];
 			const next = traces[i + 1];
-			const to = this.#addrInfos.get(trace.to)! as ContractInfo;
+			const to = this.#addrInfos.get(trace.to!)! as ContractInfo;
 			if (inSameGroup(to, this.#senderInfo)) {
 				if (searchTargetIsAttacker) {
 					setLabel(next, Label.AttackerOut);
@@ -327,6 +330,8 @@ export class Analyzer {
 		for (const trace of traces) {
 			if (trace.selector === undefined)
 				continue;
+			if (trace.to === undefined)
+				throw new Error("Trace to address is undefined");
 			/*if (trace.selector !== null) {
 				const functions = (this.#addrInfos.get(trace.to)! as ContractInfo).abi;
 				if (!functions.find(f => f.type === "function" && f.selector === trace.selector))

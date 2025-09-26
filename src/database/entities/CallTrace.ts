@@ -23,8 +23,8 @@ export class CallTrace {
 	@Column("character", { length: 40 })
 	from?: Hex.AddressNP;
 
-	@Column("character", { length: 40 })
-	to?: Hex.AddressNP;
+	@Column("character", { length: 40, nullable: true })
+	to?: Hex.AddressNP | null;
 
 	@Column("enum", {
 		enum: CallType,
