@@ -211,14 +211,21 @@ async function evaluate(
 		const hash = `0x${txn.hash}` as const;
 
 		let result: AnalysisResult | undefined;
-		try {
-			for await (result of analyzer.analyze(hash, txn.chain.id))
-				break;
-		}
-		catch (err) {
-			log(chalk.red`Analysis Error: ${hash}`, index);
-			await handleError(err, stats.errors);
-			return;
+		for (let retry = 3; ; --retry) {
+			try {
+				for await (result of analyzer.analyze(hash, txn.chain.id))
+					break;
+			}
+			catch (err) {
+				if (retry > 0 && err instanceof QueryFailedError && ((err as any).code === "23505" || err.driverError.code === "23505")) {
+					analyzer.reset(true);
+					continue; // Retry on unique violation (potentially concurrency conflict)
+				}
+				log(chalk.red`Analysis Error: ${hash}`, index);
+				await handleError(err, stats.errors);
+				return;
+			}
+			break;
 		}
 
 		const tags = txn.tags ?? 0;
