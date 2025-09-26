@@ -7,10 +7,12 @@ export class ReentrancyError extends Error {
 	}
 }
 
-export function nonReentrant(): MethodDecorator {
-	return function (_: any, propertyKey: string, descriptor: PropertyDescriptor) {
+export function nonReentrant(key?: string | symbol): MethodDecorator {
+	return function (_, propertyKey, descriptor) {
 		const originalMethod = descriptor.value;
-		const lockKey = Symbol(`__reentrancy_lock_${propertyKey}`);
+		if (typeof originalMethod !== "function")
+			throw new Error(`@nonReentrant can only be applied to methods`);
+		const lockKey = key ?? Symbol.for(`__reentrancy_lock_${String(propertyKey)}`);
 		if (originalMethod instanceof AsyncGeneratorFunction) {
 			descriptor.value = async function* (this: any, ...args: any[]) {
 				if (this[lockKey])
@@ -21,7 +23,7 @@ export function nonReentrant(): MethodDecorator {
 				} finally {
 					this[lockKey] = false;
 				}
-			};
+			} as any;
 		}
 		else if (originalMethod instanceof GeneratorFunction) {
 			descriptor.value = function* (this: any, ...args: any[]) {
@@ -33,8 +35,9 @@ export function nonReentrant(): MethodDecorator {
 				} finally {
 					this[lockKey] = false;
 				}
-			};
-		} else {
+			} as any;
+		}
+		else {
 			descriptor.value = function (this: any, ...args: any[]) {
 				if (this[lockKey])
 					throw new ReentrancyError();
@@ -50,8 +53,14 @@ export function nonReentrant(): MethodDecorator {
 					this[lockKey] = false;
 					throw error;
 				}
-			};
+			} as any;
 		}
 		return descriptor;
-	} as any;
+	};
+}
+
+export function resetReentrancyLock<T extends object>(target: T, key: string | symbol | { targetMember: keyof T | symbol; }) {
+	const lockKey = typeof key !== "object" ? key : Symbol.for(`__reentrancy_lock_${String(key.targetMember)}`);
+	if ((target as any)[lockKey])
+		(target as any)[lockKey] = false;
 }

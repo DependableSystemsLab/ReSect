@@ -9,7 +9,7 @@ import { addressToString, hasLabel, inSameGroup, setLabel, toTraceList } from ".
 import { Traverser } from "./Traverser";
 import type { AddressInfo, AnnotatedTrace, AnnotatedTraceInfo, ContractInfo, Entrance, EOAInfo } from "./types";
 import { Label, Scope, TraceNotFoundError } from "./types";
-import { nonReentrant } from "./ReentrancyGuard";
+import { nonReentrant, resetReentrancyLock } from "./ReentrancyGuard";
 
 
 export class AnalysisResult {
@@ -385,9 +385,14 @@ export class Analyzer {
 		}
 	}
 
-	clean() {
-		this.#addrInfos.clear();
-		this.#debugTraces.clear();
+	reset(preserveCache: boolean = false) {
+		this.#senderInfo = undefined!;
+		this.#victimInfo = undefined!;
+		if (!preserveCache) {
+			this.#addrInfos.clear();
+			this.#debugTraces.clear();
+		}
+		resetReentrancyLock(this, { targetMember: "analyze" });
 	}
 
 	@nonReentrant()
