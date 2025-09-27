@@ -15,8 +15,8 @@ const endpoints = {
 	ArbitrumOne: "arbitrum-mainnet",
 	ArbitrumNova: "nova-mainnet",
 	ArbitrumSepolia: "arbitrum-sepolia",
-	AvalancheCChain: "avalanche-mainnet",
-	AvalancheFuji: "avalanche-testnet",
+	AvalancheCChain: ["avalanche-mainnet", "/ext/bc/C/rpc"],
+	AvalancheFuji: ["avalanche-testnet", "/ext/bc/C/rpc"],
 	Base: "base-mainnet",
 	BaseSepolia: "base-sepolia",
 	Berachain: "bera-mainnet",
@@ -48,7 +48,7 @@ const endpoints = {
 	UnichainSepolia: "unichain-sepolia",
 	zkSync: "zksync-mainnet",
 	zkSyncSepolia: "zksync-sepolia"
-} satisfies Partial<Record<ChainName, string | null>>;
+} satisfies Partial<Record<ChainName, null | string | [host: string, suffix: string]>>;
 
 export class QuickNode
 	extends RPC.MultiChainProviderBase<QuickNode.Chain>
@@ -105,9 +105,12 @@ export class QuickNode
 
 	protected override getUrl(chain: QuickNode.Chain | number): string {
 		chain = this.verifyChain(chain);
-		const chainEndpoint = endpoints[chain];
-		const prefix = chainEndpoint === null ? this.apiKey[0] : `${this.apiKey[0]}.${chainEndpoint}`;
-		return `https://${prefix}.quiknode.pro/${this.apiKey[1]}`;
+		const endpoint = endpoints[chain];
+		const prefix = endpoint === null
+			? this.apiKey[0]
+			: `${this.apiKey[0]}.${typeof endpoint === "string" ? endpoint : endpoint[0]}`;
+		const suffix = endpoint && Array.isArray(endpoint) ? endpoint[1] : "";
+		return `https://${prefix}.quiknode.pro/${this.apiKey[1]}${suffix}`;
 	}
 
 	blockNumber(chain?: QuickNode.Chain | number) {
