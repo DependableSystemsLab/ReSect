@@ -1,4 +1,4 @@
-import { createThrottledFetch, type DefaultThrottleConfig, type Fetch } from "fetch-throttler";
+import { createThrottledFetch, type DefaultThrottleConfig, type ThrottledFetchInst } from "fetch-throttler";
 import { Chain as AllChain, type ChainName } from "../config/Chain";
 import { Database } from "../database";
 import { Hex, verifyCallTypes } from "../utils";
@@ -54,9 +54,9 @@ export class QuickNode
 	extends RPC.MultiChainProviderBase<QuickNode.Chain>
 	implements RPC.MultiChainProvider, RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.Trace> {
 
-	static readonly #fetchInsts = new Map<string, [regular: Fetch, trace: Fetch]>();
+	static readonly #fetchInsts = new Map<string, [regular: ThrottledFetchInst, trace: ThrottledFetchInst]>();
 
-	#traceFetch: Fetch;
+	#traceFetch: ThrottledFetchInst;
 	#chainName: QuickNode.Chain;
 	readonly db: Database | undefined;
 
@@ -69,7 +69,7 @@ export class QuickNode
 			const fetchConfig: DefaultThrottleConfig = {
 				interval: 1000,
 				maxConcurrency: QuickNode.rateLimits[apiKey[2] ?? QuickNode.Plan.Free],
-				maxRetry: 2,
+				maxRetry: 3,
 				shouldRetry(errOrRes) {
 					if (errOrRes instanceof Response)
 						return errOrRes.status === 429 || errOrRes.status === 408;
@@ -78,7 +78,7 @@ export class QuickNode
 			const regular = createThrottledFetch(fetchConfig);
 			const trace = createThrottledFetch({
 				...fetchConfig,
-				maxConcurrency: QuickNode.rateLimits[apiKey[2] ?? QuickNode.Plan.Free] / 2
+				maxConcurrency: QuickNode.rateLimits[apiKey[2] ?? QuickNode.Plan.Free] / 2.5
 			});
 			QuickNode.#fetchInsts.set(apiKey[0], [regular, trace]);
 		}
