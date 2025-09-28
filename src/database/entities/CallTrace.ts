@@ -39,11 +39,11 @@ export class CallTrace {
 	})
 	value?: bigint | null;
 
-	@Column("bigint")
-	gas?: bigint;
+	@Column("bigint", { nullable: true })
+	gas?: bigint | null;
 
-	@Column("bigint", { name: "gas_used" })
-	gasUsed?: bigint;
+	@Column("bigint", { name: "gas_used", nullable: true })
+	gasUsed?: bigint | null;
 
 	@Column("bytea")
 	input?: Buffer;

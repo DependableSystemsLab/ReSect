@@ -241,8 +241,8 @@ export namespace RPC.Trace {
 export namespace RPC.Debug {
 	export interface TraceInfo extends MinimalTrace {
 		value?: Hex.String;
-		gas: Hex.String;
-		gasUsed: Hex.String;
+		gas?: Hex.String;
+		gasUsed?: Hex.String;
 		error?: string;
 	}
 

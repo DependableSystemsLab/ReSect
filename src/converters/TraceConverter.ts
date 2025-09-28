@@ -93,8 +93,8 @@ export namespace TraceConverter {
 		entity.to = trace.to === undefined ? null : Hex.removePrefix(trace.to);
 		entity.type = trace.type;
 		entity.inputAsHex = trace.input;
-		entity.gas = Hex.toBigInt(trace.gas);
-		entity.gasUsed = Hex.toBigInt(trace.gasUsed);
+		entity.gas = trace.gas == undefined ? null : Hex.toBigInt(trace.gas);
+		entity.gasUsed = trace.gasUsed == undefined ? null : Hex.toBigInt(trace.gasUsed);
 		if (trace.value)
 			entity.value = Hex.toBigInt(trace.value);
 		if (trace.output)
