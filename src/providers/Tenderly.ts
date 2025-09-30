@@ -1,7 +1,7 @@
 import { Chain as AllChain, type ChainName } from "../config/Chain";
 import { Database } from "../database";
 import { verifyCallTypes, Hex } from "../utils";
-import { verifyChain, RPC, type DebugTraceProvider } from "./common";
+import { verifyChain, RPC, type DebugTraceProvider, type CallTraceProvider } from "./common";
 import { integration } from "./integration";
 
 
@@ -32,7 +32,7 @@ const endpoints = {
 
 export class Tenderly
 	extends RPC.MultiChainProviderBase<Tenderly.Chain>
-	implements RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.TraceInfo> {
+	implements RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.TraceInfo>, CallTraceProvider<RPC.Trace.Trace> {
 
 	readonly #apiKeys: Tenderly.ApiKeys;
 	#chainName: Tenderly.Chain;
@@ -103,6 +103,16 @@ export class Tenderly
 
 	call(request: RPC.CallRequest, blockNumber: RPC.BlockNumber, chain?: Tenderly.Chain | number) {
 		return this.request<Hex.String>("eth_call", [request, blockNumber], chain);
+	}
+
+	async traceTransaction(txHash: Hex.TxHash, chain?: Tenderly.Chain | number) {
+		Hex.verifyTxHash(txHash);
+		const traces = await this.request<RPC.Trace.TraceInfo[] | null>("trace_transaction", [txHash, chain]);
+		return traces?.length ? traces.map(RPC.Trace.convert) : null;
+	}
+
+	getCallTraces(txHash: Hex.TxHash, chain?: number) {
+		return this.traceTransaction(txHash, chain);
 	}
 
 	@integration()

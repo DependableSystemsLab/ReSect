@@ -2,7 +2,7 @@ import { createThrottledFetch, type DefaultThrottleConfig, type ThrottledFetchIn
 import { Chain as AllChain, type ChainName } from "../config/Chain";
 import { Database } from "../database";
 import { Hex, verifyCallTypes } from "../utils";
-import { verifyChain, RPC, type DebugTraceProvider } from "./common";
+import { verifyChain, RPC, type DebugTraceProvider, type CallTraceProvider } from "./common";
 import { integration } from "./integration";
 
 
@@ -52,7 +52,7 @@ const endpoints = {
 
 export class QuickNode
 	extends RPC.MultiChainProviderBase<QuickNode.Chain>
-	implements RPC.MultiChainProvider, RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.Trace> {
+	implements RPC.MultiChainProvider, RPC.Debug.MultiChainProvider, DebugTraceProvider<RPC.Debug.Trace>, CallTraceProvider<RPC.Trace.Trace> {
 
 	static readonly #fetchInsts = new Map<string, [regular: ThrottledFetchInst, trace: ThrottledFetchInst]>();
 
@@ -137,6 +137,22 @@ export class QuickNode
 
 	call(request: RPC.CallRequest, blockNumber: RPC.BlockNumber, chain?: QuickNode.Chain | number) {
 		return this.request<Hex.String>("eth_call", [request, blockNumber], chain);
+	}
+
+	async traceTransaction(txHash: Hex.TxHash, chain?: QuickNode.Chain | number) {
+		chain = this.verifyChain(chain ?? this.#chainName);
+		const method = chain.startsWith("Arbitrum") ? "arbtrace_transaction" : "trace_transaction";
+		const traces = await this.request<RPC.Trace.TraceInfo[] | null>(method, [txHash], chain, this.#traceFetch)
+			.catch(err => {
+				if (err instanceof Response && err.status === 404)
+					return null;
+				throw err;
+			});
+		return traces?.length ? traces.map(RPC.Trace.convert) : null;
+	}
+
+	getCallTraces(txHash: Hex.TxHash, chain?: number) {
+		return this.traceTransaction(txHash, chain);
 	}
 
 	@integration()

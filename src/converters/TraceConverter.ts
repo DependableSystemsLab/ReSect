@@ -17,55 +17,38 @@ export namespace TraceConverter {
 		return 0;
 	}
 
-	/**
-	 * Checks whether `b` is a valid direct successor of `a`.
-	 * @param a `traceAddress` of the first call trace
-	 * @param b `traceAddress` of the second call trace
-	 */
-	function verifyAdjacentTraceAddress(a: number[], b: number[]): boolean {
-		if (b.length - a.length > 1)
-			return false;
-		for (let i = 0; i < a.length; i++) {
-			if (a[i] === b[i])
-				continue;
-			if (b[i] === undefined)
-				return false;
-			return i === b.length - 1 && a[i] === b[i] - 1;
-		}
-		return a.length === b.length - 1 && b.last() === 0;
-	}
-
 	export function callTracesToDebugTrace<T extends MinimalTrace = MinimalTrace>(
 		callTraces: CallTrace<T>[],
-		verify: boolean = true,
-		sort: boolean = false
+		sort: boolean = true
 	): DebugTrace<T> {
-		if (sort)
+		if (callTraces.sum(t => t.subtraces) !== callTraces.length - 1)
+			throw new Error("Inconsistent subtrace counts");
+		if (sort && !callTraces.isAscending(compareCallTraces))
 			callTraces.sort(compareCallTraces);
-		const { traceAddress, ...rest } = callTraces[0];
-		if (traceAddress?.length)
+		const { traceAddress: rootTraceAddress, subtraces: rootSubtraces, ...rest } = callTraces[0];
+		if (rootTraceAddress?.length)
 			throw new Error("Invalid call traces: first traceAddress must be empty");
 		const topTrace = rest as unknown as DebugTrace<T>;
-		const stack = [[topTrace, traceAddress ?? []] as const];
+		const stack = [[topTrace, { traceAddress: rootTraceAddress, subtraces: rootSubtraces }] as const];
 		for (let i = 1; i < callTraces.length; i++) {
-			const { traceAddress, ...rest } = callTraces[i];
-			const last = stack.last();
-			if (verify && !verifyAdjacentTraceAddress(last[1], traceAddress))
+			const { traceAddress, subtraces, ...rest } = callTraces[i];
+			const [parent, info] = stack.last();
+			if (traceAddress.length !== info.traceAddress.length + 1 ||
+				traceAddress.last() !== (parent.calls?.length ?? 0) ||
+				!traceAddress.slice(0, -1).every((v, i) => v === info.traceAddress[i]))
 				throw new Error("Invalid array of call traces: traceAddress mismatch");
 			const debugTrace = rest as unknown as DebugTrace<T>;
-			const lengthDiff = traceAddress.length - last[1].length;
-			if (lengthDiff > 1)
-				throw new Error("Invalid array of call traces: traceAddress mismatch");
-			if (lengthDiff === 1) {
-				last[0].calls ??= [];
-				last[0].calls.push(debugTrace);
-			}
-			else {
-				for (let j = 0; j < lengthDiff + 1; j++)
+			parent.calls ??= [];
+			parent.calls.push(debugTrace);
+			if (subtraces > 0)
+				stack.push([debugTrace, { traceAddress, subtraces }] as const);
+			else if (info.subtraces === parent.calls.length) {
+				let last: typeof stack[number] | undefined;
+				do {
 					stack.pop();
-				stack.last()[0].calls!.push(debugTrace);
+					last = stack.last();
+				} while (last && last[1].subtraces === last[0].calls!.length);
 			}
-			stack.push([debugTrace, traceAddress]);
 		}
 		return topTrace;
 	}
@@ -161,19 +144,20 @@ export namespace TraceConverter {
 		return trace;
 	}
 
-	export function callTracesToEntities(callTraces: CallTrace<RPC.Debug.TraceInfo>[], txHash: Hex.String, sort: boolean = true): Entity[] {
-		const debugTrace = callTracesToDebugTrace(callTraces, true, sort);
+	export function callTracesToEntities(callTraces: RPC.Trace.Trace[], txHash: Hex.String, sort: boolean = true): Entity[] {
+		const debugTrace = callTracesToDebugTrace(callTraces, sort);
 		return debugTraceToEntities(debugTrace, txHash);
 	}
 
-	export function entitiesToCallTraces(entities: Entity[]): CallTrace<RPC.Debug.TraceInfo>[] {
+	export function entitiesToCallTraces(entities: Entity[]): RPC.Trace.Trace[] {
 		entities = buildEntityHierarchy(entities);
 		return entities.map(entity => {
-			const trace = {} as CallTrace<RPC.Debug.TraceInfo>;
+			const trace = {} as RPC.Trace.Trace;
 			const stack = entity.stack;
 			if (stack === undefined)
 				throw new Error("Parent chain incomplete");
 			trace.traceAddress = stack;
+			trace.subtraces = entity.children?.length ?? 0;
 			_setTraceFromEntity(trace, entity);
 			return trace;
 		});

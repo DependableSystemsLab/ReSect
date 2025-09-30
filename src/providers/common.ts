@@ -1,6 +1,6 @@
 import type { Fetch } from "fetch-throttler";
 import { chainNames, type ChainName } from "../config/Chain";
-import { Hex, type CallTrace, type DebugTrace, type MinimalTrace } from "../utils";
+import { CallType, Hex, type CallTrace, type DebugTrace, type MinimalTrace } from "../utils";
 
 
 export function verifyChain<T extends ChainName = ChainName>(
@@ -235,7 +235,113 @@ export namespace RPC {
 }
 
 export namespace RPC.Trace {
-	export type Trace = CallTrace;
+	interface TraceInfoBase {
+		blockHash: Hex.BlockHash;
+		blockNumber: number;
+		error?: string;
+		subtraces: number;
+		traceAddress: number[];
+		transactionHash: Hex.TxHash;
+		transactionPosition: number;
+	}
+
+	export interface CallTraceInfo extends TraceInfoBase {
+		action: {
+			callType: "call" | "delegatecall" | "staticcall" | "callcode";
+			from: Hex.Address;
+			gas: Hex.String;
+			input: Hex.String;
+			to: Hex.Address;
+			value: Hex.String;
+		};
+		result: {
+			gasUsed: Hex.String;
+			output: Hex.String;
+		};
+		type: "call";
+	}
+
+	export interface CreateTraceInfo extends TraceInfoBase {
+		action: {
+			from: Hex.Address;
+			gas: Hex.String;
+			init: Hex.String;
+			value: Hex.String;
+		};
+		result: {
+			address: Hex.Address;
+			code: Hex.String;
+			gasUsed: Hex.String;
+		};
+		type: "create";
+	}
+
+	export interface SuicideTraceInfo extends TraceInfoBase {
+		action: {
+			address: Hex.Address;
+			refundAddress: Hex.Address;
+			balance: Hex.String;
+		};
+		result: null;
+		type: "suicide";
+	}
+
+	export type TraceInfo = CallTraceInfo | CreateTraceInfo | SuicideTraceInfo;
+
+	export type Trace = CallTrace<RPC.Debug.TraceInfo>;
+
+	export interface Provider {
+		traceTransaction(txHash: Hex.TxHash): Promise<Trace | null>;
+	}
+
+	export type MultiChainProvider = RPC.MultiChainProvider<Provider>;
+
+	export function convert(trace: TraceInfo): Trace {
+		const result = {
+			traceAddress: trace.traceAddress,
+			subtraces: trace.subtraces
+		} as Trace;
+		if (trace.error !== undefined)
+			result.error = trace.error;
+		switch (trace.type) {
+			case "call": {
+				result.type = trace.action.callType.toUpperCase() as CallType;
+				result.from = trace.action.from;
+				result.to = trace.action.to;
+				result.value = trace.action.value;
+				result.input = trace.action.input;
+				result.output = trace.result.output;
+				result.gas = trace.action.gas;
+				result.gasUsed = trace.result.gasUsed;
+				break;
+			}
+			case "create": {
+				result.type = CallType.CREATE;
+				result.from = trace.action.from;
+				result.to = trace.result.address;
+				result.value = trace.action.value;
+				result.input = trace.action.init;
+				result.output = trace.result.code;
+				result.gas = trace.action.gas;
+				result.gasUsed = trace.result.gasUsed;
+				break;
+			}
+			case "suicide": {
+				result.type = CallType.SELFDESTRUCT;
+				result.from = trace.action.address;
+				result.to = trace.action.refundAddress;
+				result.value = trace.action.balance;
+				result.input = "0x";
+				result.output = undefined;
+				result.gas = "0x0";
+				result.gasUsed = "0x0";
+				break;
+			}
+			default:
+				throw new Error(`Unexpected root trace type: ${(trace as any).type}`);
+		}
+		return result;
+	}
 }
 
 export namespace RPC.Debug {

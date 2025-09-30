@@ -19,6 +19,7 @@ export interface MinimalTrace {
 }
 
 export type CallTrace<T extends MinimalTrace = MinimalTrace> = T & {
+	subtraces: number;
 	traceAddress: number[];
 };
 
