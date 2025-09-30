@@ -2,8 +2,9 @@ import "basic-type-extensions";
 import { abiFromBytecode } from "@shazow/whatsabi";
 import chalk from "chalk";
 import { checkTrace, ERC1155, ERC1363, ERC20, ERC223, ERC677, ERC721, ERC777 } from "../config/ERC";
+import { TraceConverter } from "../converters";
 import { ReentrancyAttack } from "../database/entities/ReentrancyAttack";
-import { type DebugTraceProvider, Etherscan, type RPC } from "../providers";
+import { type CallTraceProvider, type DebugTraceProvider, Etherscan, type RPC } from "../providers";
 import { CallType, type DebugTrace, extractSelector, Hex, type MinimalTrace, type ReverseDebugTrace } from "../utils";
 import { addressToString, hasLabel, inSameGroup, setLabel, toTraceList } from "./functions";
 import { Traverser } from "./Traverser";
@@ -83,6 +84,7 @@ export class Analyzer {
 	constructor(
 		readonly etherscan: Etherscan,
 		readonly debugProvider: DebugTraceProvider,
+		readonly traceProvider?: CallTraceProvider,
 		rpcProvider?: RPC.MultiChainProvider
 	) {
 		this.#rpcProvider = rpcProvider ??= etherscan;
@@ -186,6 +188,11 @@ export class Analyzer {
 		let trace: DebugTrace | null | undefined = this.#debugTraces.get(txHash);
 		if (!trace) {
 			trace = await this.debugProvider.getDebugTrace(txHash, chain);
+			if (trace === null && this.traceProvider) {
+				const traces = await this.traceProvider.getCallTraces(txHash, chain);
+				if (traces !== null)
+					trace = TraceConverter.callTracesToDebugTrace(traces);
+			}
 			if (trace === null)
 				throw new TraceNotFoundError(txHash);
 			this.#debugTraces.set(txHash, trace);
@@ -404,7 +411,7 @@ export class Analyzer {
 	async *analyze(txHash: Hex.String, chain: number): AsyncGenerator<AnalysisResult> {
 		// Fetch debug trace
 		const txn = Hex.verifyTxHash(txHash);
-		const rawTrace = this.#debugTraces.get(txn) ?? await this.debugProvider.getDebugTrace(txn, chain);
+		const rawTrace = await this.#getDebugTrace(txn, chain);
 		if (rawTrace === null)
 			throw new TraceNotFoundError(txn);
 		this.#debugTraces.set(txn, rawTrace);

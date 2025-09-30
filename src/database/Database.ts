@@ -217,6 +217,24 @@ export class Database {
 		return await this.#setChains(txns);
 	}
 
+	async getCallTraces(txHash: Hex.String): Promise<RPC.Trace.Trace[] | null> {
+		const hash = Hex.removePrefix(Hex.verifyTxHash(txHash));
+		const repo = await this.getRepository(CallTrace);
+		const entities = await repo.find({
+			where: { txHash: hash },
+			relations: undefined,
+			order: { index: "ASC" }
+		});
+		if (entities.length === 0)
+			return null;
+		return TraceConverter.entitiesToCallTraces(entities);
+	}
+
+	async saveCallTraces(traces: RPC.Trace.Trace[], txHash: Hex.TxHash): Promise<CallTrace[]> {
+		const entities = TraceConverter.callTracesToEntities(traces, txHash);
+		return await this.#batchSave(CallTrace, entities);
+	}
+
 	async getDebugTrace(txHash: Hex.String): Promise<RPC.Debug.Trace | null> {
 		const hash = Hex.removePrefix(Hex.verifyTxHash(txHash));
 		const repo = await this.getRepository(CallTrace);

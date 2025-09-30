@@ -118,7 +118,7 @@ async function evaluate(
 	const database = Database.default;
 	const txRepo = await database.getRepository(Transaction);
 	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum, useDatabase ? database : undefined);
-	const debugProvider: DebugTraceProvider = quickNodeApiKey
+	const provider = quickNodeApiKey
 		? new QuickNode(quickNodeApiKey, undefined, useDatabase ? database : undefined)
 		: new Tenderly(tenderlyNodeAccessKeys, undefined, useDatabase ? database : undefined);
 
@@ -145,7 +145,7 @@ async function evaluate(
 	};
 
 	const fnTest = async (txn: FnTx, index: number) => {
-		const analyzer = new Analyzer(etherscan, debugProvider);
+		const analyzer = new Analyzer(etherscan, provider, provider);
 		const hash = `0x${txn.hash}` as const;
 		const attack = txn.attack!;
 
@@ -207,7 +207,7 @@ async function evaluate(
 	};
 
 	const fpTest = async (txn: FpTx, index: number) => {
-		const analyzer = new Analyzer(etherscan, debugProvider);
+		const analyzer = new Analyzer(etherscan, provider, provider);
 		const hash = `0x${txn.hash}` as const;
 
 		let result: AnalysisResult | undefined;

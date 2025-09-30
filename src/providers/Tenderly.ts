@@ -105,6 +105,7 @@ export class Tenderly
 		return this.request<Hex.String>("eth_call", [request, blockNumber], chain);
 	}
 
+	@integration()
 	async traceTransaction(txHash: Hex.TxHash, chain?: Tenderly.Chain | number) {
 		Hex.verifyTxHash(txHash);
 		const traces = await this.request<RPC.Trace.TraceInfo[] | null>("trace_transaction", [txHash, chain]);

@@ -32,12 +32,12 @@ describe("Reentrancy Analyzer", () => {
 	jest.setTimeout(timeout);
 
 	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum);
-	const debugProvider: DebugTraceProvider = quickNodeApiKey
+	const provider = quickNodeApiKey
 		? new QuickNode(quickNodeApiKey, "Ethereum")
 		: new Tenderly(tenderlyNodeAccessKeys, "Ethereum");
 
 	const etherscanWithDb = new Etherscan(etherscanApiKeys, Chain.Ethereum, Database.default);
-	const debugProviderWithDb: DebugTraceProvider = quickNodeApiKey
+	const providerWithDb = quickNodeApiKey
 		? new QuickNode(quickNodeApiKey, "Ethereum", Database.default)
 		: new Tenderly(tenderlyNodeAccessKeys, "Ethereum", Database.default);
 
@@ -45,8 +45,8 @@ describe("Reentrancy Analyzer", () => {
 		const { chain, txHash } = testCase;
 		const chainId = Chain[chain];
 		const analyzer = testCase.useDatabase === false
-			? new Analyzer(etherscan, debugProvider)
-			: new Analyzer(etherscanWithDb, debugProviderWithDb);
+			? new Analyzer(etherscan, provider, provider)
+			: new Analyzer(etherscanWithDb, providerWithDb, providerWithDb);
 		let detected = false;
 		let scope = Scope.CrossContract;
 		let readonly = false;
@@ -170,6 +170,46 @@ describe("Reentrancy Analyzer", () => {
 		scope: Scope.CrossFunction,
 		entranceType: ReentrancyAttack.EntryPoint.Fallback,
 		readonly: false
+	}));
+
+	// Logical bug
+	test("Earning.Farm Attack", testOnCase({
+		isReentrancy: true,
+		name: "Earning.Farm Attack",
+		chain: "Ethereum",
+		txHash: "0x6e6e556a5685980317cb2afdb628ed4a845b3cbd1c98bdaffd0561cb2c4790fa",
+		scope: Scope.CrossFunction,
+		entranceType: ReentrancyAttack.EntryPoint.Fallback,
+		readonly: false
+	}));
+
+	// 404
+	test("DeltaPrime Attack", testOnCase({
+		isReentrancy: true,
+		name: "DeltaPrime Attack",
+		chain: "AvalancheCChain",
+		txHash: "0xece4efbe11e59d457cb1359ebdc4efdffdd310f0a82440be03591f2e27d2b59e",
+		scope: Scope.CrossContract,
+		entranceType: ReentrancyAttack.EntryPoint.ApplicationHook,
+		readonly: false
+	}));
+
+	// Unexpected error
+	test("Sentiment Attack", testOnCase({
+		isReentrancy: true,
+		name: "Sentiment Attack",
+		chain: "ArbitrumOne",
+		txHash: "0xa9ff2b587e2741575daf893864710a5cbb44bb64ccdc487a100fa20741e0f74d",
+		scope: Scope.CrossContract,
+		entranceType: ReentrancyAttack.EntryPoint.Fallback,
+		readonly: true
+	}));
+
+	test("Strange Error", testOnCase({
+		isReentrancy: false,
+		name: "Whatever",
+		chain: "World",
+		txHash: "0xf5e906e2afd2ee51513a362556af70bdd8c03e91ca7a84c37e561a066b15f7bb"
 	}));
 
 	test("Non-Reentrancy", testOnCase({

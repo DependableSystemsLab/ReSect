@@ -4,7 +4,7 @@ import { Hex } from "../utils";
 import type { RPC } from "./common";
 
 
-type Provider = RPC.Provider & RPC.Debug.Provider;
+type Provider = RPC.Provider & RPC.Debug.Provider & RPC.Trace.Provider;
 export type IntegrationContext<K extends keyof Provider | null = keyof RPC.Provider> =
 	& (IsNull<K> extends true ? {} : RPC.MultiChainProvider<Pick<Provider, NonNullable<K>>>)
 	& {
@@ -31,6 +31,23 @@ async function saveBlockIfNotExists(
 	if (block == null)
 		throw new Error(`Block ${blockNumber} on chain ${chain} not found`);
 	await database.saveBlock(block as RPC.Block, chain);
+}
+
+async function saveTransactionIfNotExists(
+	this: any,
+	database: Database,
+	txHash: Hex.String,
+	chain: number
+) {
+	if (typeof this.getTransactionByHash !== "function")
+		throw new IntegrationError(`Method getTransactionByHash not found`);
+	if (await database.has(Transaction, Hex.removePrefix(txHash)))
+		return;
+	const tx = await this.getTransactionByHash(txHash, chain);
+	if (tx == null)
+		throw new Error(`Transaction ${txHash} not found`);
+	await saveBlockIfNotExists.call(this, database, tx.blockNumber, chain);
+	await database.saveTransaction(tx, chain);
 }
 
 export class IntegrationError extends Error { }
@@ -115,6 +132,27 @@ export function integration(
 				} as any;
 				break;
 			}
+			case "traceTransaction": {
+				descriptor.value = async function (this: any, ...args: Parameters<RPCFuncWithChain<"traceTransaction">>) {
+					const db = getDatabase.call(this);
+					if (db == null)
+						return original.call(this, ...args);
+					const [txHash, chain = getDefaultChain()] = args;
+					let traces: RPC.Trace.Trace[] | null;
+					if (read) {
+						traces = await db.getCallTraces(txHash);
+						if (traces !== null)
+							return traces;
+					}
+					traces = await original.call(this, txHash, chain);
+					if (write && traces !== null) {
+						await saveTransactionIfNotExists.call(this, db, txHash, chain);
+						await db.saveCallTraces(traces, txHash);
+					}
+					return traces;
+				} as any;
+				break;
+			}
 			case "debugTraceTransaction": {
 				descriptor.value = async function (this: any, ...args: Parameters<RPCFuncWithChain<"debugTraceTransaction">>) {
 					const db = getDatabase.call(this);
@@ -129,15 +167,7 @@ export function integration(
 					}
 					trace = await original.call(this, txHash, options, chain);
 					if (write && trace !== null) {
-						if (!await db.has(Transaction, Hex.removePrefix(txHash))) {
-							if (typeof this.getTransactionByHash !== "function")
-								throw new IntegrationError(`Method getTransactionByHash not found`);
-							const tx = await this.getTransactionByHash(txHash, chain);
-							if (tx == null)
-								throw new Error(`Transaction ${txHash} not found`);
-							await saveBlockIfNotExists.call(this, db, tx.blockNumber, chain);
-							await db.saveTransaction(tx, chain);
-						}
+						await saveTransactionIfNotExists.call(this, db, txHash, chain);
 						await db.saveDebugTrace(trace, txHash);
 					}
 					return trace;

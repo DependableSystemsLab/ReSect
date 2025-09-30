@@ -139,6 +139,7 @@ export class QuickNode
 		return this.request<Hex.String>("eth_call", [request, blockNumber], chain);
 	}
 
+	@integration()
 	async traceTransaction(txHash: Hex.TxHash, chain?: QuickNode.Chain | number) {
 		chain = this.verifyChain(chain ?? this.#chainName);
 		const method = chain.startsWith("Arbitrum") ? "arbtrace_transaction" : "trace_transaction";
