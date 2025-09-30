@@ -1,5 +1,6 @@
+import { Transform } from "class-transformer";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
-import { Hex, CallType } from "../../utils";
+import { Hex, CallType, Transformer } from "../../utils";
 import { Transaction } from "./Transaction";
 
 
@@ -32,6 +33,7 @@ export class CallTrace {
 	})
 	type?: CallType;
 
+	@Transform(Transformer.bigint.nullable.fn)
 	@Column("numeric", {
 		precision: 31,
 		scale: 0,
@@ -39,9 +41,11 @@ export class CallTrace {
 	})
 	value?: bigint | null;
 
+	@Transform(Transformer.bigint.nullable.fn)
 	@Column("bigint", { nullable: true })
 	gas?: bigint | null;
 
+	@Transform(Transformer.bigint.nullable.fn)
 	@Column("bigint", { name: "gas_used", nullable: true })
 	gasUsed?: bigint | null;
 
