@@ -238,53 +238,57 @@ export namespace RPC.Trace {
 	interface TraceInfoBase {
 		blockHash: Hex.BlockHash;
 		blockNumber: number;
-		error?: string;
 		subtraces: number;
 		traceAddress: number[];
 		transactionHash: Hex.TxHash;
 		transactionPosition: number;
 	}
 
-	export interface CallTraceInfo extends TraceInfoBase {
-		action: {
+	type TraceInfoTemplate<Type extends string, Action, Result> = TraceInfoBase & {
+		action: Action;
+		type: Type;
+	} & ({ result: Result; } | { error: string; });
+
+	export type CallTraceInfo = TraceInfoTemplate<
+		"call",
+		{
 			callType: "call" | "delegatecall" | "staticcall" | "callcode";
 			from: Hex.Address;
 			gas: Hex.String;
 			input: Hex.String;
 			to: Hex.Address;
 			value: Hex.String;
-		};
-		result: {
+		},
+		{
 			gasUsed: Hex.String;
 			output: Hex.String;
-		};
-		type: "call";
-	}
+		}
+	>;
 
-	export interface CreateTraceInfo extends TraceInfoBase {
-		action: {
+	export type CreateTraceInfo = TraceInfoTemplate<
+		"create",
+		{
 			from: Hex.Address;
 			gas: Hex.String;
 			init: Hex.String;
 			value: Hex.String;
-		};
-		result: {
+		},
+		{
 			address: Hex.Address;
 			code: Hex.String;
 			gasUsed: Hex.String;
-		};
-		type: "create";
-	}
+		}
+	>;
 
-	export interface SuicideTraceInfo extends TraceInfoBase {
-		action: {
+	export type SuicideTraceInfo = TraceInfoTemplate<
+		"suicide",
+		{
 			address: Hex.Address;
 			refundAddress: Hex.Address;
 			balance: Hex.String;
-		};
-		result: null;
-		type: "suicide";
-	}
+		},
+		null
+	>;
 
 	export type TraceInfo = CallTraceInfo | CreateTraceInfo | SuicideTraceInfo;
 
@@ -301,7 +305,7 @@ export namespace RPC.Trace {
 			traceAddress: trace.traceAddress,
 			subtraces: trace.subtraces
 		} as Trace;
-		if (trace.error !== undefined)
+		if ("error" in trace && trace.error !== undefined)
 			result.error = trace.error;
 		switch (trace.type) {
 			case "call": {
@@ -310,20 +314,24 @@ export namespace RPC.Trace {
 				result.to = trace.action.to;
 				result.value = trace.action.value;
 				result.input = trace.action.input;
-				result.output = trace.result.output;
 				result.gas = trace.action.gas;
-				result.gasUsed = trace.result.gasUsed;
+				if ("result" in trace) {
+					result.output = trace.result.output;
+					result.gasUsed = trace.result.gasUsed;
+				}
 				break;
 			}
 			case "create": {
 				result.type = CallType.CREATE;
 				result.from = trace.action.from;
-				result.to = trace.result.address;
 				result.value = trace.action.value;
 				result.input = trace.action.init;
-				result.output = trace.result.code;
 				result.gas = trace.action.gas;
-				result.gasUsed = trace.result.gasUsed;
+				if ("result" in trace) {
+					result.to = trace.result.address;
+					result.output = trace.result.code;
+					result.gasUsed = trace.result.gasUsed;
+				}
 				break;
 			}
 			case "suicide": {
