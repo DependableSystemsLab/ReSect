@@ -2,6 +2,7 @@ import { Transform, Type } from "class-transformer";
 import { Column, Entity, Index, JoinColumn, ManyToOne, PrimaryColumn } from "typeorm";
 import { Transformer, type Hex } from "../../utils";
 import { Chain } from "./Chain";
+import type { EntityOnlyRelations, EntityWithRelations, FullEntity, RelationKeys } from "./types";
 
 
 @Entity("Block")
@@ -59,4 +60,12 @@ export class Block {
 			this.chainId = chainId;
 		}
 	}
+}
+
+export namespace Block {
+	export const relations = Object.freeze(["chain"]) satisfies RelationKeys<Block>;
+	export type Relations = typeof relations[number];
+	export type Full = FullEntity<Block, Relations>;
+	export type WithRelations<T extends Block.Relations, U extends Block = Block> = EntityWithRelations<Block, T, U>;
+	export type OnlyRelations<T extends Block.Relations, U extends Block = Block> = EntityOnlyRelations<Block, Relations, T, U>;
 }

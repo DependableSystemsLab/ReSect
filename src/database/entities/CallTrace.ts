@@ -2,6 +2,7 @@ import { Transform } from "class-transformer";
 import { Column, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryColumn } from "typeorm";
 import { Hex, CallType, Transformer } from "../../utils";
 import { Transaction } from "./Transaction";
+import type { EntityOnlyRelations, EntityWithRelations, FullEntity, RelationKeys } from "./types";
 
 
 @Entity("CallTrace")
@@ -142,4 +143,12 @@ export class CallTrace {
 			this.index = index;
 		}
 	}
+}
+
+export namespace CallTrace {
+	export const relations = Object.freeze(["transaction", "parent", "children"]) satisfies RelationKeys<CallTrace>;
+	export type Relations = typeof relations[number];
+	export type Full = FullEntity<CallTrace, Relations>;
+	export type WithRelations<T extends CallTrace.Relations, U extends CallTrace = CallTrace> = EntityWithRelations<CallTrace, T, U>;
+	export type OnlyRelations<T extends CallTrace.Relations, U extends CallTrace = CallTrace> = EntityOnlyRelations<CallTrace, Relations, T, U>;
 }
