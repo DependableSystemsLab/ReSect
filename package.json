@@ -10,7 +10,8 @@
 		"evaluate:all": "dotenvx run -- tsx tasks/evaluation.ts --total=all",
 		"evaluate:fp": "dotenvx run -- tsx tasks/evaluation.ts --type=fp",
 		"fix-database": "dotenvx run -- tsx tasks/database-fix.ts",
-		"create-fp-dataset": "dotenvx run -- tsx tasks/fp-dataset-creation.ts"
+		"create-fp-dataset": "dotenvx run -- tsx tasks/fp-dataset-creation.ts",
+		"export:fp": "dotenvx run -- tsx tasks/export.ts"
 	},
 	"author": "Yuqi Liu",
 	"license": "MIT",
