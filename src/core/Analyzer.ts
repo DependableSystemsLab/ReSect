@@ -450,6 +450,7 @@ export class Analyzer {
 			}
 			result.entrances = Array.from(this.#analyzeEntrances(traces));
 			yield result;
+			traces.forEach(t => t.label = undefined); // Reset labels
 		}
 	}
 }
