@@ -7,7 +7,7 @@ import readline from "node:readline";
 import { Chain } from "../src/config/Chain";
 import { etherscanApiKeys, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { CallTrace, Database, ReentrancyAttack, Transaction } from "../src/database";
-import { type DebugTraceProvider, Etherscan, QuickNode, Tenderly } from "../src/providers";
+import { Etherscan, QuickNode, Tenderly } from "../src/providers";
 import { Analyzer, Scope, TraceNotFoundError, type AnalysisResult } from "../src/core";
 import type { Hex } from "../src/utils";
 
@@ -106,21 +106,32 @@ async function handleError(error: any, stats: Record<string, number>) {
 
 type FnTx = Pick<Transaction.WithAttack, "hash" | "chain" | "attack">;
 type FpTx = Transaction.WithRelations<"chain">;
+interface EvaluationOptions {
+	database: boolean;
+	concurrency: number;
+	progressBar: boolean;
+	printReentrancyDetails: boolean;
+}
 
-async function evaluate(type: "fn", txns: readonly FnTx[], useDatabase?: boolean, concurrancy?: number): Promise<void>;
-async function evaluate(type: "fp", txns: readonly FpTx[], useDatabase?: boolean, concurrancy?: number): Promise<void>;
+async function evaluate(type: "fn", txns: readonly FnTx[], options?: Partial<EvaluationOptions>): Promise<void>;
+async function evaluate(type: "fp", txns: readonly FpTx[], options?: Partial<EvaluationOptions>): Promise<void>;
 async function evaluate(
 	type: "fn" | "fp",
 	txns: readonly FnTx[] | readonly FpTx[],
-	useDatabase: boolean = true,
-	concurrency: number = 1
+	options: Partial<EvaluationOptions> = {}
 ) {
+	const opts: EvaluationOptions = {
+		database: options.database ?? true,
+		concurrency: options.concurrency ?? 1,
+		progressBar: options.progressBar ?? type === "fp",
+		printReentrancyDetails: options.printReentrancyDetails ?? type === "fp"
+	};
 	const database = Database.default;
 	const txRepo = await database.getRepository(Transaction);
-	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum, useDatabase ? database : undefined);
+	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum, opts.database ? database : undefined);
 	const provider = quickNodeApiKey
-		? new QuickNode(quickNodeApiKey, undefined, useDatabase ? database : undefined)
-		: new Tenderly(tenderlyNodeAccessKeys, undefined, useDatabase ? database : undefined);
+		? new QuickNode(quickNodeApiKey, undefined, opts.database ? database : undefined)
+		: new Tenderly(tenderlyNodeAccessKeys, undefined, opts.database ? database : undefined);
 
 	const stats = {
 		detected: 0,
@@ -129,19 +140,19 @@ async function evaluate(
 		positive: new Array<{ hash: Hex.TxHash, result: AnalysisResult; }>(),
 		errors: { total: 0 } as Record<string, number>,
 	};
-	const bar = new cliProgress.SingleBar({
+	const bar = opts.progressBar ? new cliProgress.SingleBar({
 		format: `{bar} {percentage}% | Time: {duration_formatted} | {value}/{total} txs | {speed} txs/s | {message}`,
 		fps: 5,
 		hideCursor: true,
 		autopadding: true
-	}, cliProgress.Presets.shades_classic);
+	}, cliProgress.Presets.shades_classic) : undefined;
 	const width = Math.floor(Math.log10(txns.length)) + 1;
 	const log = (msg: string, index?: number, resetCursor = true) => {
 		if (resetCursor) {
 			readline.clearLine(process.stdout, 0);
 			readline.cursorTo(process.stdout, 0);
 		}
-		console.log(index === undefined ? msg : chalk.grey`[${(index + 1).toString().padStart(width, " ")} / ${txns.length}] ` + msg);
+		console.log(index === undefined ? msg : chalk.grey`[${(index + 1).toString().padStart(width, " ")}/${txns.length}] ` + msg);
 	};
 
 	const fnTest = async (txn: FnTx, index: number) => {
@@ -150,20 +161,23 @@ async function evaluate(
 		const attack = txn.attack!;
 
 		const txInfo = `${attack.name} (${hash} on ${txn.chain.name})`;
-		bar.update({ message: txInfo });
+		log(chalk.white`Analyzing ${txInfo}`, index);
+		bar?.update({ message: txInfo });
 
 		let detected = false;
-		let scope = Scope.CrossContract;
 		let readonly = false;
+		const scopes = new Set<Scope>();
 		const entranceTypes = new Set<ReentrancyAttack.EntryPoint>();
 
+		const results = new Array<AnalysisResult>();
 		try {
 			for await (const result of analyzer.analyze(hash, txn.chain.id)) {
 				detected = true;
-				scope = Math.min(scope, result.scope);
+				scopes.add(result.scope);
 				if (result.readonly === true)
 					readonly = true;
 				result.entrances.forEach(e => entranceTypes.add(e.type));
+				results.push(result);
 			}
 		}
 		catch (err) {
@@ -181,12 +195,11 @@ async function evaluate(
 		const actual: Record<string, any> = {};
 		if (attack.scope != null) {
 			expected.scope = convertScope(attack.scope);
-			actual.scope = scope;
+			actual.scope = scopes.has(expected.scope) ? expected.scope : Array.from(scopes);
 		}
 		if (attack.entryPoint != null) {
 			expected.entryPoint = attack.entryPoint;
-			const types = Array.from(entranceTypes);
-			actual.entryPoint = types.includes(expected.entryPoint) ? expected.entryPoint : types;
+			actual.entryPoint = entranceTypes.has(expected.entryPoint) ? expected.entryPoint : Array.from(entranceTypes);
 		}
 		let equal = true;
 		for (const key in expected) {
@@ -195,15 +208,19 @@ async function evaluate(
 					log(chalk.yellow`Mismatched analysis for ${txInfo}:`, index);
 					equal = false;
 				}
-				console.log(chalk.yellow`  Expected ${key} to be ${expected[key]}, but got ${actual[key]}`);
+				log(chalk.yellow`  Expected ${key} to be ${expected[key]}, but got ${actual[key]}`, index);
 				stats.mismatch[key] ??= 0;
 				++stats.mismatch[key];
 			}
 		}
 		if (!equal)
 			++stats.mismatch.total;
-		else
+		else {
 			++stats.passed;
+			log(chalk.green`Test passed: ${attack.name}`, index);
+		}
+		if (opts.printReentrancyDetails)
+			results.forEach(r => log(r.toString()));
 	};
 
 	const fpTest = async (txn: FpTx, index: number) => {
@@ -241,20 +258,21 @@ async function evaluate(
 		if (result) {
 			stats.positive.push({ hash, result });
 			log(chalk.yellow`Positive detected: ${hash}`, index);
-			log(result.toString());
-			bar.update({ message: `Reentrancy: ${stats.positive.length}` });
+			if (opts.printReentrancyDetails)
+				log(result.toString());
+			bar?.update({ message: `Reentrancy: ${stats.positive.length}` });
 		}
 	};
 
-	bar.start(txns.length, 0);
+	bar?.start(txns.length, 0);
 	const startTime = Date.now();
 	let completed = 0;
 	const finalize = () => {
 		++completed;
-		bar.update(completed, { speed: (completed / ((Date.now() - startTime) / 1000)).toFixed(1) });
+		bar?.update(completed, { speed: (completed / ((Date.now() - startTime) / 1000)).toFixed(1) });
 	};
 	process.on("SIGINT", () => {
-		bar.stop();
+		bar?.stop();
 		printResult();
 		process.exit(0);
 	});
@@ -263,10 +281,10 @@ async function evaluate(
 			? (txn, idx) => fnTest(txn as FnTx, idx).finally(finalize)
 			: (txn, idx) => fpTest(txn as FpTx, idx).finally(finalize),
 		txns,
-		{ maxConcurrency: concurrency }
+		{ maxConcurrency: opts.concurrency }
 	);
 	const endTime = Date.now();
-	bar.stop();
+	bar?.stop();
 
 	function printResult(timestamp: number = Date.now()) {
 		log(chalk.white`Evaluated ${completed} transactions in ${((timestamp - startTime) / 1000).toFixed(1)}s`);
@@ -366,6 +384,16 @@ const cliParser = yargs()
 		default: true,
 		description: "Use database for analysis"
 	})
+	.option("progress-bar", {
+		type: "boolean",
+		default: undefined,
+		description: "Whether to show progress bar during evaluation. Defaults to true for false positive evaluation and false for false negative evaluation"
+	})
+	.option("print-reentrancy-details", {
+		type: "boolean",
+		default: undefined,
+		description: "Whether to print reentrancy details for positive cases. Defaults to true for false positive evaluation and false for false negative evaluation"
+	})
 	.option("only-with-cache", {
 		type: "boolean",
 		default: false,
@@ -439,12 +467,12 @@ async function filterCollection<T extends Transaction>(
 		if (chainId !== undefined)
 			collection = collection.filter(tx => tx.chainId === chainId);
 		collection = await filterCollection(collection, argv);
-		await evaluate("fn", collection, argv.database, argv.concurrency);
+		await evaluate("fn", collection, argv);
 	}
 	else {
 		let collection = await Database.default.getFpEvaluationTransactions(chainId, total === "all" ? undefined : total as number, argv.skip);
 		collection = await filterCollection(collection, argv);
-		await evaluate("fp", collection, argv.database, argv.concurrency);
+		await evaluate("fp", collection, argv);
 	}
 	process.exit(0);
 })();
