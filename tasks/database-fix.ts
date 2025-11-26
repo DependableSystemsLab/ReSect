@@ -1,7 +1,10 @@
 import "basic-type-extensions";
+import chalk from "chalk";
+import cliProgress from "cli-progress";
 import { In, IsNull } from "typeorm";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import readline from "node:readline";
 import { etherscanApiKeys, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { typeormConfig } from "../src/config/typeorm";
 import { JsonRpcConverter } from "../src/converters";
@@ -210,9 +213,73 @@ async function cleanBlocks(chainId?: number) {
 	}
 }
 
+async function fetchBlockTxnCounts(chainId?: number, concurrency: number = 16) {
+	const repo = await database.getRepository(Block);
+	const blocks = await repo.find({
+		select: ["number", "chainId"],
+		where: {
+			chainId,
+			transactionCount: IsNull()
+		}
+	});
+	if (blocks.length === 0)
+		return;
+	const provider = new QuickNode(quickNodeApiKey!);
+	const bar = new cliProgress.SingleBar({
+		format: `{bar} {percentage}% | ETA: {eta_formatted} | {value}/{total} blocks`,
+		etaBuffer: 20,
+		hideCursor: true,
+		autopadding: true,
+		fps: 10
+	}, cliProgress.Presets.shades_classic);
+	const width = Math.floor(Math.log10(blocks.length)) + 1;
+	const log = (msg: string, index?: number, resetCursor = true) => {
+		if (resetCursor) {
+			readline.clearLine(process.stdout, 0);
+			readline.cursorTo(process.stdout, 0);
+		}
+		console.log(index === undefined ? msg : chalk.grey`[${(index + 1).toString().padStart(width, " ")}/${blocks.length}] ` + msg);
+	};
+	bar.start(blocks.length, 0);
+	await blocks.forEachAsync(async (block, idx) => {
+		const resp = await provider
+			.getBlockByNumber(Hex.toString(block.number), false, block.chainId)
+			.catch(err => {
+				log(chalk.red`Failed to fetch block ${block.number} on chain ${block.chainId}: ${err}`, idx);
+				return null;
+			});
+		if (resp) {
+			const count = resp.transactions.length;
+			await repo.update({ chainId: block.chainId, number: block.number }, { transactionCount: count })
+				.then(() => block.transactionCount = count)
+				.catch(err => log(chalk.red`Failed to update block ${block.number} on chain ${block.chainId}: ${err}`, idx));
+		}
+		bar.increment();
+	}, blocks, { maxConcurrency: concurrency });
+	bar.stop();
+	const success = blocks.filter(b => b.transactionCount != null);
+	console.log(`Fetched transaction counts for ${success.length}/${blocks.length} blocks`);
+}
+
 const cliParser = yargs()
 	.command("fetch-blocks", false, undefined, fetchBlocks)
 	.command("fetch-contracts", false, undefined, fetchContracts)
+	.command({
+		command: "fetch-block-txn-counts [chainId]",
+		describe: "Fetch missing transaction counts for blocks",
+		builder: yargs => yargs
+			.positional("chainId", {
+				type: "number",
+				describe: "Chain ID to fetch block transaction counts for (all chains if not specified)",
+				demandOption: false
+			})
+			.option("concurrency", {
+				type: "number",
+				describe: "Number of concurrent requests to make",
+				default: 16
+			}),
+		handler: argv => fetchBlockTxnCounts(argv.chainId, argv.concurrency)
+	})
 	.command({
 		command: "clean-blocks [chainId]",
 		describe: "Remove blocks that have no associated transactions",
