@@ -40,23 +40,29 @@ export class AnalysisResult {
 		return chalk`${name}: {green ${value}}\n`;
 	}
 
-	toString(): string {
-		let str = "\n";
-		str += this.#fieldToString("Readonly", this.readonly);
+	characteristicsToString(): string {
+		let str = this.#fieldToString("Readonly", this.readonly);
 		str += this.#fieldToString("Scope", Scope[this.scope]);
 		str += this.#fieldToString("Trace Index", this.reTrace.index);
 		str += this.#fieldToString("Trace Stack", this.reStack);
-		str += this.#fieldToString("Attackers", `${chalk.greenBright(this.attackers.length)} addresses`);
+		str += this.#fieldToString("Entrances", `${chalk.greenBright(this.entrances.length)} entries`);
+		for (const entrance of this.entrances)
+			str += `\t${AnalysisResult.#entranceToString(entrance)}\n`;
+		return str;
+	}
+
+	addressesToString(): string {
+		let str = this.#fieldToString("Attackers", `${chalk.greenBright(this.attackers.length)} addresses`);
 		for (const addr of this.attackers)
 			str += `\t${addressToString(addr)}\n`;
 		str += this.#fieldToString("Victims", `${chalk.greenBright(this.victims.length)} addresses`);
 		for (const addr of this.victims)
 			str += `\t${addressToString(addr)}\n`;
-		str += this.#fieldToString("Entrances", `${chalk.greenBright(this.entrances.length)} entries`);
-		for (const entrance of this.entrances)
-			str += `\t${AnalysisResult.#entranceToString(entrance)}\n`;
-		str += "\n";
 		return str;
+	}
+
+	toString(): string {
+		return `\n${this.characteristicsToString()}${this.addressesToString()}\n`;
 	}
 }
 
