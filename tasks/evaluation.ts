@@ -110,6 +110,7 @@ interface EvaluationOptions {
 	database: boolean;
 	concurrency: number;
 	progressBar: boolean;
+	earlyExit: boolean;
 	printReentrancyDetails: boolean;
 }
 
@@ -124,6 +125,7 @@ async function evaluate(
 		database: options.database ?? true,
 		concurrency: options.concurrency ?? 1,
 		progressBar: options.progressBar ?? type === "fp",
+		earlyExit: options.earlyExit ?? false,
 		printReentrancyDetails: options.printReentrancyDetails ?? type === "fp"
 	};
 	const database = Database.default;
@@ -171,13 +173,15 @@ async function evaluate(
 
 		const results = new Array<AnalysisResult>();
 		try {
-			for await (const result of analyzer.analyze(hash, txn.chain.id)) {
+			for await (const result of analyzer.analyze(hash, txn.chain.id, !opts.earlyExit)) {
 				detected = true;
 				scopes.add(result.scope);
 				if (result.readonly === true)
 					readonly = true;
 				result.entrances.forEach(e => entranceTypes.add(e.type));
 				results.push(result);
+				if (opts.earlyExit)
+					break;
 			}
 		}
 		catch (err) {
@@ -287,7 +291,8 @@ async function evaluate(
 	bar?.stop();
 
 	function printResult(timestamp: number = Date.now()) {
-		log(chalk.white`Evaluated ${completed} transactions in ${((timestamp - startTime) / 1000).toFixed(1)}s`);
+		const duration = timestamp - startTime;
+		log(chalk.white`Evaluated ${completed} transactions in ${(duration / 1000).toFixed(1)}s (${(duration / completed).toFixed(1)} ms/tx)`);
 		log(chalk.white`Evaluation Summary:`);
 		const logStats = (color: chalk.Chalk, label: string, count: number, total: number) =>
 			log(color`${label}: ${count}/${total} (${(count / total * 100).toFixed(2)}%)`);
@@ -388,6 +393,11 @@ const cliParser = yargs()
 		type: "boolean",
 		default: undefined,
 		description: "Whether to show progress bar during evaluation. Defaults to true for false positive evaluation and false for false negative evaluation"
+	})
+	.option("early-exit", {
+		type: "boolean",
+		default: false,
+		description: "Report reentrancy immediately when found, without analyzing the full trace. Only applicable for false negative evaluation"
 	})
 	.option("print-reentrancy-details", {
 		type: "boolean",

@@ -408,7 +408,7 @@ export class Analyzer {
 	}
 
 	@nonReentrant()
-	async *analyze(txHash: Hex.String, chain: number): AsyncGenerator<AnalysisResult> {
+	async *analyze(txHash: Hex.String, chain: number, longest: boolean = true): AsyncGenerator<AnalysisResult> {
 		// Fetch debug trace
 		const txn = Hex.verifyTxHash(txHash);
 		const rawTrace = await this.#getDebugTrace(txn, chain);
@@ -430,7 +430,7 @@ export class Analyzer {
 			return;
 		// Traverse the call trace to find reentrancy
 		const traverser = new Traverser<AnnotatedTraceInfo>(this.#addrInfos);
-		for (const stack of traverser.traverse(callTrace)) {
+		for (const stack of traverser.traverse(callTrace, longest)) {
 			const traces = this.#annotateTrace(callTrace, stack);
 			const result = new AnalysisResult({
 				scope: Scope.CrossContract,

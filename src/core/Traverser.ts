@@ -13,7 +13,7 @@ export class Traverser<T extends MinimalTrace = MinimalTrace> {
 
 	constructor(public readonly infos: Map<string, AddressInfo>) { }
 
-	*#traverse(trace: DebugTrace<T>, senderContractDepth: number, proxy: boolean): Generator<number[]> {
+	*#traverse(trace: DebugTrace<T>, senderContractDepth: number, proxy: boolean, longest: boolean): Generator<number[]> {
 		if (trace.to === undefined || (trace as unknown as RPC.Debug.Trace).error != undefined)
 			return;
 		const to = this.infos.get(trace.to)!;
@@ -27,6 +27,10 @@ export class Traverser<T extends MinimalTrace = MinimalTrace> {
 
 		const reentrancyDetected = senderContractDepth !== -1 && !proxy
 			&& this.beforeCount.enumerate().some(([addr, count]) => count > 0 && inSameGroup(addr, to));
+		if (reentrancyDetected && !longest) {
+			yield this.currentStack.slice();
+			return;
+		}
 		if (!(trace.calls?.length)) {
 			if (reentrancyDetected)
 				yield this.currentStack.slice();
@@ -66,7 +70,7 @@ export class Traverser<T extends MinimalTrace = MinimalTrace> {
 			// TODO: But could this lead to false negative?
 			const isProxy = nextTrace.type === CallType.DELEGATECALL
 				&& trace.input.length === nextTrace.input.length && trace.input === nextTrace.input;
-			for (const result of this.#traverse(nextTrace, newSenderContractDepth, isProxy)) {
+			for (const result of this.#traverse(nextTrace, newSenderContractDepth, isProxy, longest)) {
 				reentrancyDetectedInCalls = true;
 				yield result;
 			}
@@ -85,9 +89,9 @@ export class Traverser<T extends MinimalTrace = MinimalTrace> {
 		this.sender = undefined!;
 	}
 
-	*traverse(callTrace: DebugTrace<T>): Generator<number[]> {
+	*traverse(callTrace: DebugTrace<T>, longest: boolean = true): Generator<number[]> {
 		this.#clear();
 		this.sender = this.infos.get(callTrace.from)! as EOAInfo;
-		yield* this.#traverse(callTrace, -1, false);
+		yield* this.#traverse(callTrace, -1, false, longest);
 	}
 }
