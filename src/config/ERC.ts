@@ -53,15 +53,15 @@ export function checkAbi<T extends string = string>(
 export function checkTrace<T extends string = string>(
 	trace: MinimalTrace,
 	target: NamedABI<T>
-): boolean {
+): FuncOutput<T> | null {
 	const selector = extractSelector(trace);
 	if (selector == null)
-		return false; // Fallback or not a call type
+		return null; // Fallback or not a call type
 	for (const name in target) {
 		if (target[name].selector === selector)
-			return true;
+			return target[name];
 	}
-	return false;
+	return null;
 }
 
 export namespace ERC20 {

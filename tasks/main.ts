@@ -58,10 +58,10 @@ const cliParser = yargs()
 	let first = false;
 	for await (const result of analyzer.analyze(txHash, chainId, !earlyExit)) {
 		if (!first) {
-			console.log(result.addressesToString());
+			console.log(result.toString("addresses"));
 			first = true;
 		}
-		console.log(result.characteristicsToString());
+		console.log(result.toString("characteristics"));
 	}
 	process.exit(0);
 })();

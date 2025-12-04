@@ -13,13 +13,24 @@ import { Label, Scope, TraceNotFoundError } from "./types";
 import { nonReentrant, resetReentrancyLock } from "./ReentrancyGuard";
 
 
+const ercHooks = new Map<Hex.Selector, string>([
+	[ERC223.Recipient.abis.tokenReceived.selector, "ERC223.tokenReceived"],
+	[ERC677.Recipient.abis.onTokenTransfer.selector, "ERC677.onTokenTransfer"],
+	[ERC721.Recipient.abis.onERC721Received.selector, "ERC721.onERC721Received"],
+	[ERC777.Sender.abis.tokensToSend.selector, "ERC777.tokensToSend"],
+	[ERC777.Recipient.abis.tokensReceived.selector, "ERC777.tokensReceived"],
+	[ERC1155.Recipient.abis.onERC1155Received.selector, "ERC1155.onERC1155Received"],
+	[ERC1155.Recipient.abis.onERC1155BatchReceived.selector, "ERC1155.onERC1155BatchReceived"],
+	[ERC1363.Spender.abis.onApprovalReceived.selector, "ERC1363.onApprovalReceived"],
+	[ERC1363.Recipient.abis.onTransferReceived.selector, "ERC1363.onTransferReceived"]
+]);
+
 export class AnalysisResult {
 	readonly!: boolean;
 	scope!: Scope;
 	attackers!: AddressInfo[];
 	victims!: AddressInfo[];
-	rootTrace!: AnnotatedTrace;
-	reTrace!: AnnotatedTraceInfo;
+	traces!: AnnotatedTrace[];
 	reStack!: number[];
 	entrances!: Entrance[];
 
@@ -29,10 +40,16 @@ export class AnalysisResult {
 
 	static #entranceToString({ type, trace }: Entrance): string {
 		const name = Object.entries(ReentrancyAttack.EntryPoint).find(([, v]) => v === type)![0];
-		let str = chalk`{red [${name}]} {inverse ${trace.type}}: {cyanBright ${trace.from}} -> {cyanBright ${trace.to}}`;
+		let str = chalk`{red [${name}]} {cyanBright ${trace.from}} {inverse ${trace.type}} {cyanBright ${trace.to}}`;
 		const selector = extractSelector(trace);
-		if (selector !== undefined)
-			str += chalk` ({yellowBright ${selector ?? "fallback"}})`;
+		if (selector !== undefined) {
+			let text = selector === null ? "fallback" : selector;
+			if (type === ReentrancyAttack.EntryPoint.MaliciousToken)
+				text = `ERC20.${checkTrace(trace, ERC20.abis)!.name}`;
+			else if (type === ReentrancyAttack.EntryPoint.ERCHook)
+				text = ercHooks.get(selector!)!;
+			str += chalk` ({yellowBright ${text}})`;
+		}
 		return str;
 	}
 
@@ -40,43 +57,41 @@ export class AnalysisResult {
 		return chalk`${name}: {green ${value}}\n`;
 	}
 
-	characteristicsToString(): string {
-		let str = this.#fieldToString("Readonly", this.readonly);
-		str += this.#fieldToString("Scope", Scope[this.scope]);
-		str += this.#fieldToString("Trace Index", this.reTrace.index);
-		str += this.#fieldToString("Trace Stack", this.reStack);
-		str += this.#fieldToString("Entrances", `${chalk.greenBright(this.entrances.length)} entries`);
-		for (const entrance of this.entrances)
-			str += `\t${AnalysisResult.#entranceToString(entrance)}\n`;
+	toString(content: "characteristics" | "addresses" | "all" = "all"): string {
+		let str = "";
+		if (content === "characteristics" || content === "all") {
+			str += this.#fieldToString("Scope", Scope[this.scope]);
+			str += this.#fieldToString("Trace Index", this.traces.last().index);
+			str += this.#fieldToString("Trace Stack", this.reStack);
+			str += this.#fieldToString("Entrances", `${chalk.greenBright(this.entrances.length)} entries`);
+			for (const entrance of this.entrances)
+				str += `\t${AnalysisResult.#entranceToString(entrance)}\n`;
+			str += "Reentrancy Stack:\n";
+			const depthWidth = String(this.traces.length - 1).length;
+			for (let i = 0; i < this.traces.length; i++) {
+				const trace = this.traces[i];
+				if (!trace.label)
+					continue;
+				const fromColor = hasLabel(trace, Label.VictimOut) ? "greenBright" : hasLabel(trace, Label.AttackerOut) ? "redBright" : "blueBright";
+				const toColor = hasLabel(trace, Label.VictimIn) ? "greenBright" : hasLabel(trace, Label.AttackerIn) ? "redBright" : "blueBright";
+				str += chalk`\t{gray [${i.toString().padStart(depthWidth, " ")}]} {${fromColor} ${trace.from}} {inverse ${trace.type}} {${toColor} ${trace.to}}`;
+				const selector = trace.selector === null ? "fallback" : trace.selector;
+				if (selector)
+					str += chalk` ({yellowBright ${selector}})`;
+				str += "\n";
+			}
+		}
+		if (content === "addresses" || content === "all") {
+			str += this.#fieldToString("Attackers", `${chalk.greenBright(this.attackers.length)} addresses`);
+			for (const addr of this.attackers)
+				str += `\t${addressToString(addr)}\n`;
+			str += this.#fieldToString("Victims", `${chalk.greenBright(this.victims.length)} addresses`);
+			for (const addr of this.victims)
+				str += `\t${addressToString(addr)}\n`;
+		}
 		return str;
-	}
-
-	addressesToString(): string {
-		let str = this.#fieldToString("Attackers", `${chalk.greenBright(this.attackers.length)} addresses`);
-		for (const addr of this.attackers)
-			str += `\t${addressToString(addr)}\n`;
-		str += this.#fieldToString("Victims", `${chalk.greenBright(this.victims.length)} addresses`);
-		for (const addr of this.victims)
-			str += `\t${addressToString(addr)}\n`;
-		return str;
-	}
-
-	toString(): string {
-		return `\n${this.characteristicsToString()}${this.addressesToString()}\n`;
 	}
 }
-
-const hookRecipientSelectors = [
-	ERC223.Recipient.abis.tokenReceived.selector,
-	ERC677.Recipient.abis.onTokenTransfer.selector,
-	ERC721.Recipient.abis.onERC721Received.selector,
-	ERC777.Sender.abis.tokensToSend.selector,
-	ERC777.Recipient.abis.tokensReceived.selector,
-	ERC1155.Recipient.abis.onERC1155Received.selector,
-	ERC1155.Recipient.abis.onERC1155BatchReceived.selector,
-	ERC1363.Spender.abis.onApprovalReceived.selector,
-	ERC1363.Recipient.abis.onTransferReceived.selector
-];
 
 export class Analyzer {
 	readonly #rpcProvider: RPC.MultiChainProvider;
@@ -393,10 +408,10 @@ export class Analyzer {
 				yield { type: ReentrancyAttack.EntryPoint.Fallback, trace };
 				continue;
 			}
-			const type = checkTrace(trace, ERC20.abis)
+			const type = checkTrace(trace, ERC20.abis) !== null
 				? ReentrancyAttack.EntryPoint.MaliciousToken
 				// TODO: Could reentrancy possibly be initiated with CREATE?
-				: hookRecipientSelectors.includes(trace.selector!)
+				: ercHooks.has(trace.selector!)
 					? ReentrancyAttack.EntryPoint.ERCHook
 					: ReentrancyAttack.EntryPoint.ApplicationHook;
 			yield { type, trace };
@@ -440,9 +455,8 @@ export class Analyzer {
 			const traces = this.#annotateTrace(callTrace, stack);
 			const result = new AnalysisResult({
 				scope: Scope.CrossContract,
-				reTrace: traces.last(),
+				traces,
 				reStack: stack,
-				rootTrace: callTrace,
 				attackers: senderAddresses,
 				victims: Array.from(this.#addrInfos.values())
 					.filter(info => inSameGroup(this.#victimInfo, info))
