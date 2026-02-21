@@ -189,7 +189,7 @@ describe("Reentrancy Analyzer", () => {
 		name: "DeltaPrime Attack",
 		chain: "AvalancheCChain",
 		txHash: "0xece4efbe11e59d457cb1359ebdc4efdffdd310f0a82440be03591f2e27d2b59e",
-		scope: Scope.CrossContract,
+		scope: Scope.CrossFunction,
 		entranceType: ReentrancyAttack.EntryPoint.ApplicationHook,
 		readonly: false
 	}));
