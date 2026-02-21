@@ -141,6 +141,8 @@ async function evaluate(
 		mismatch: { total: 0 } as Record<string, number>,
 		positive: new Array<{ hash: Hex.TxHash, result: AnalysisResult; }>(),
 		errors: { total: 0 } as Record<string, number>,
+		dbTime: 0,
+		dbQueries: 0,
 	};
 	const bar = opts.progressBar ? new cliProgress.SingleBar({
 		format: `{bar} {percentage}% | Time: {duration_formatted} | {value}/{total} txs | {speed} txs/s | {message}`,
@@ -166,6 +168,7 @@ async function evaluate(
 		log(chalk.white`Analyzing ${txInfo}`, index);
 		bar?.update({ message: txInfo });
 
+		Database.queryProfiler.reset();
 		let detected = false;
 		let readonly = false;
 		const scopes = new Set<Scope>();
@@ -225,12 +228,15 @@ async function evaluate(
 		}
 		if (opts.printReentrancyDetails)
 			results.forEach(r => log(r.toString()));
+		stats.dbTime += Database.queryProfiler.totalTime;
+		stats.dbQueries += Database.queryProfiler.queryCount;
 	};
 
 	const fpTest = async (txn: FpTx, index: number) => {
 		const analyzer = new Analyzer(etherscan, provider, provider);
 		const hash = `0x${txn.hash}` as const;
 
+		Database.queryProfiler.reset();
 		let result: AnalysisResult | undefined;
 		for (let retry = 3; ; --retry) {
 			try {
@@ -266,6 +272,8 @@ async function evaluate(
 				log(result.toString());
 			bar?.update({ message: `Reentrancy: ${stats.positive.length}` });
 		}
+		stats.dbTime += Database.queryProfiler.totalTime;
+		stats.dbQueries += Database.queryProfiler.queryCount;
 	};
 
 	bar?.start(txns.length, 0);
@@ -293,6 +301,11 @@ async function evaluate(
 	function printResult(timestamp: number = Date.now()) {
 		const duration = timestamp - startTime;
 		log(chalk.white`Evaluated ${completed} transactions in ${(duration / 1000).toFixed(1)}s (${(duration / completed).toFixed(1)} ms/tx)`);
+		if (opts.database && completed > 0) {
+			const computeTime = duration - stats.dbTime;
+			log(chalk.white`  DB I/O: ${(stats.dbTime / 1000).toFixed(1)}s (${(stats.dbTime / completed).toFixed(1)} ms/tx, ${stats.dbQueries} queries)`);
+			log(chalk.white`  Computation: ${(computeTime / 1000).toFixed(1)}s (${(computeTime / completed).toFixed(1)} ms/tx)`);
+		}
 		log(chalk.white`Evaluation Summary:`);
 		const logStats = (color: chalk.Chalk, label: string, count: number, total: number) =>
 			log(color`${label}: ${count}/${total} (${(count / total * 100).toFixed(2)}%)`);

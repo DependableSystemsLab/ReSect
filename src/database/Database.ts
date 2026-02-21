@@ -1,6 +1,7 @@
 import { Promisable, type Arrayable, type SetRequired } from "type-fest";
 import { DataSource, In, IsNull, Not, Raw, type DataSourceOptions, type EntityTarget, type ObjectLiteral } from "typeorm";
 import { Block, CallTrace, Chain, Contract, Transaction } from "./entities";
+import { QueryProfiler } from "./QueryProfiler";
 import { typeormConfig } from "../config/typeorm";
 import { EtherscanConverter, JsonRpcConverter, TraceConverter } from "../converters";
 import type { Etherscan, RPC } from "../providers";
@@ -15,10 +16,15 @@ export class Database {
 		return this.#default;
 	}
 
+	static readonly queryProfiler = new QueryProfiler();
+
 	#source: Promisable<DataSource>;
 
 	constructor(options: DataSourceOptions) {
-		this.#source = new DataSource(options).initialize();
+		this.#source = new DataSource(options).initialize().then(ds => {
+			ds.subscribers.push(Database.queryProfiler);
+			return ds;
+		});
 	}
 
 	#verifyPrimaryKey<Entity extends ObjectLiteral>(
