@@ -1,7 +1,7 @@
 {
-	"name": "reentrancy-analyzer",
+	"name": "reentrancy-dissector",
 	"version": "1.0.0",
-	"description": "Analyze characteristics of reentrancy transactions.",
+	"description": "A tool for detecting and analyzing reentrancy patterns in EVM transactions.",
 	"private": true,
 	"scripts": {
 		"build": "tsc -b tsconfig.build.json",
@@ -15,7 +15,7 @@
 		"export:fp": "dotenvx run -- tsx tasks/export.ts"
 	},
 	"author": "Yuqi Liu",
-	"license": "MIT",
+	"license": "LGPL-3.0-only",
 	"dependencies": {
 		"@dotenvx/dotenvx": "^1.43.0",
 		"@shazow/whatsabi": "^0.21.1",
