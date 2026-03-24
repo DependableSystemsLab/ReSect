@@ -313,6 +313,7 @@ export class Etherscan implements RPC.MultiChainProvider {
 export namespace Etherscan {
 	export enum APITier {
 		Free,
+		Lite,
 		Standard,
 		Advanced,
 		Professional,
@@ -322,7 +323,8 @@ export namespace Etherscan {
 	export type ApiKey = readonly [key: string, tier?: APITier];
 
 	export const rateLimits: Record<APITier, [perSecond: number, perDay: number]> = {
-		[Etherscan.APITier.Free]: [5, 100_000],
+		[Etherscan.APITier.Free]: [3, 100_000],
+		[Etherscan.APITier.Lite]: [5, 100_000],
 		[Etherscan.APITier.Standard]: [10, 200_000],
 		[Etherscan.APITier.Advanced]: [20, 500_000],
 		[Etherscan.APITier.Professional]: [30, 1_000_000],
