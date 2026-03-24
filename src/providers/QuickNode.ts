@@ -9,11 +9,9 @@ import { integration } from "./integration";
 const endpoints = {
 	Ethereum: null,
 	EthereumSepolia: "ethereum-sepolia",
-	EthereumHolesky: "ethereum-holesky",
 	Abstract: "abstract-mainnet",
 	AbstractSepolia: "abstract-testnet",
 	ArbitrumOne: "arbitrum-mainnet",
-	ArbitrumNova: "nova-mainnet",
 	ArbitrumSepolia: "arbitrum-sepolia",
 	AvalancheCChain: ["avalanche-mainnet", "/ext/bc/C/rpc"],
 	AvalancheFuji: ["avalanche-testnet", "/ext/bc/C/rpc"],
@@ -40,14 +38,10 @@ const endpoints = {
 	Scroll: "scroll-mainnet",
 	ScrollSepolia: "scroll-testnet",
 	Sonic: "sonic-mainnet",
-	Sophon: "sophon-mainnet",
-	SophonSepolia: "sophon-testnet",
 	World: "worldchain-mainnet",
 	WorldSepolia: "worldchain-sepolia",
 	Unichain: "unichain-mainnet",
-	UnichainSepolia: "unichain-sepolia",
-	zkSync: "zksync-mainnet",
-	zkSyncSepolia: "zksync-sepolia"
+	UnichainSepolia: "unichain-sepolia"
 } satisfies Partial<Record<ChainName, null | string | [host: string, suffix: string]>>;
 
 export class QuickNode

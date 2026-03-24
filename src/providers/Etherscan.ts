@@ -50,7 +50,7 @@ export class Etherscan implements RPC.MultiChainProvider {
 		chain: number = Chain.Ethereum,
 		database?: Database
 	) {
-		this.#chain = chain;
+		this.chain = chain;
 		const apiKeys = typeof apiKey === "string"
 			? [apiKey]
 			: !Array.isArray(apiKey)
@@ -90,6 +90,8 @@ export class Etherscan implements RPC.MultiChainProvider {
 		params?: QueryObject,
 		verifyStatus: boolean = true
 	): Promise<T> {
+		if (chain != undefined && !Chain[chain])
+			throw new Error(`Unsupported chain ID: ${chain}`);
 		const [apiKey, fetchFunc] = this.#fetchPairs.minimum(([, f]) => {
 			const stats = f.stats(Etherscan.BASE_URL);
 			return (stats.active + stats.waiting) / f.config.maxConcurrency;

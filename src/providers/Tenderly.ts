@@ -8,9 +8,7 @@ import { integration } from "./integration";
 const endpoints = {
 	Ethereum: "mainnet",
 	EthereumSepolia: "sepolia",
-	EthereumHolesky: "holesky",
 	ArbitrumOne: "arbitrum",
-	ArbitrumNova: "arbitrum-nova",
 	ArbitrumSepolia: "arbitrum-sepolia",
 	AvalancheCChain: "avalanche",
 	AvalancheFuji: "avalanche-fuji",
@@ -25,9 +23,7 @@ const endpoints = {
 	ApeChain: "apechain",
 	ApeChainCurtis: "curtis",
 	Mantle: "mantle",
-	MantleSepolia: "mantle-sepolia",
-	zkSync: "zksync",
-	zkSyncSepolia: "zksync-sepolia"
+	MantleSepolia: "mantle-sepolia"
 } satisfies Partial<Record<ChainName, string>>;
 
 export class Tenderly
