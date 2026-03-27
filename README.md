@@ -18,7 +18,7 @@ Ethereum, Arbitrum One/Nova, Avalanche C-Chain, Base, BNB Smart Chain, Blast, Ce
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org/) (v18+)
+- [Node.js](https://nodejs.org/) (v22+)
 - [pnpm](https://pnpm.io/)
 - PostgreSQL (optional — required for database caching and evaluation scripts)
 
@@ -59,7 +59,7 @@ pnpm install
 ### Analyze a transaction
 
 ```bash
-pnpm start -- <tx-hash> [options]
+pnpm start <tx-hash> [options]
 ```
 
 | Option          | Description                                               | Default        |
@@ -73,8 +73,8 @@ Example:
 Run on ChainPaint reentrancy attack (Feb 2024).
 
 ```bash
-pnpm start -- 0x0eb8f8d148508e752d9643ccf49ac4cb0c21cbad346b5bbcf2d06974d31bd5c4 --chain Ethereum
-pnpm start -- 0x0eb8f8d148508e752d9643ccf49ac4cb0c21cbad346b5bbcf2d06974d31bd5c4 --chain 56 --no-database
+pnpm start 0x0eb8f8d148508e752d9643ccf49ac4cb0c21cbad346b5bbcf2d06974d31bd5c4 --chain Ethereum
+pnpm start 0x0eb8f8d148508e752d9643ccf49ac4cb0c21cbad346b5bbcf2d06974d31bd5c4 --chain 56 --no-database
 ```
 
 Example output
