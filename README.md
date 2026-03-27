@@ -70,14 +70,33 @@ pnpm start -- <tx-hash> [options]
 
 Example:
 
+Run on ChainPaint reentrancy attack (Feb 2024).
+
 ```bash
-pnpm start -- 0xabcd...1234 --chain Ethereum
-pnpm start -- 0xabcd...1234 --chain 56 --no-database
+pnpm start -- 0x0eb8f8d148508e752d9643ccf49ac4cb0c21cbad346b5bbcf2d06974d31bd5c4 --chain Ethereum
+pnpm start -- 0x0eb8f8d148508e752d9643ccf49ac4cb0c21cbad346b5bbcf2d06974d31bd5c4 --chain 56 --no-database
+```
+
+Example output
+
+```
+Attackers: 2 addresses
+	[EOA] 0x145766a51ae96e69810fe76f6f68fd0e95675a0b
+	[Contract] 0x8d4de2bc1a566b266bd4b387f62c21e15474d12a <- 0x145766a51ae96e69810fe76f6f68fd0e95675a0b (2024-02-12 11:10:35)
+Victims: 1 addresses
+	[Contract] 0x52d69c67536f55efefe02941868e5e762538dbd6 <- 0x28d808550ed0a9a15bd3b9103664b8c12abfa740 (2024-02-12 02:39:35)
+
+Scope: SingleFunction
+Trace Index: 124
+Trace Stack: 2,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1
+Entrances: 40 entries
+	[Fallback] 0x52d69c67536f55efefe02941868e5e762538dbd6 CALL 0x8d4de2bc1a566b266bd4b387f62c21e15474d12a (fallback)
+...
 ```
 
 ### Run evaluation
 
-Requires a PostgreSQL database populated with the attack dataset.
+Requires a PostgreSQL database populated with the attack dataset. The database is available at [Zenodo: Dataset and Reproducibility for ReSect: A Tool for Automated Analysis of Reentrancy Transactions on Blockchains](https://zenodo.org/records/19208343)
 
 ```bash
 pnpm run evaluate:first   # False negative eval — one tx per attack
