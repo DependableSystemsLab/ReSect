@@ -10,6 +10,10 @@
 		"experimentalDecorators": true,
 		"resolveJsonModule": true,
 		"strict": true,
-		"noImplicitOverride": true
+		"noImplicitOverride": true,
+		"types": [
+			"node",
+			"jest"
+		]
 	}
 }
