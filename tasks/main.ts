@@ -3,7 +3,7 @@ import { hideBin } from "yargs/helpers";
 import { Chain } from "../src/config/Chain";
 import { etherscanApiKeys, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Database } from "../src/database";
-import { Etherscan, QuickNode, Tenderly } from "../src/providers";
+import { CacheProvider, Etherscan, QuickNode, Tenderly } from "../src/providers";
 import { Analyzer } from "../src/core";
 import { Hex } from "../src/utils";
 
@@ -52,7 +52,11 @@ const cliParser = yargs()
 	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum, database);
 	const provider = quickNodeApiKey
 		? new QuickNode(quickNodeApiKey, "Ethereum", database)
-		: new Tenderly(tenderlyNodeAccessKeys, "Ethereum", database);
+		: tenderlyNodeAccessKeys
+			? new Tenderly(tenderlyNodeAccessKeys, "Ethereum", database)
+			: database ? new CacheProvider(database) : undefined;
+	if (!provider)
+		throw new Error("At least one provider (QuickNode, Tenderly) or database must be available");
 	const analyzer = new Analyzer(etherscan, provider, provider);
 
 	let first = false;

@@ -7,7 +7,7 @@ import readline from "node:readline";
 import { Chain } from "../src/config/Chain";
 import { etherscanApiKeys, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { CallTrace, Database, ReentrancyAttack, Transaction } from "../src/database";
-import { Etherscan, QuickNode, Tenderly } from "../src/providers";
+import { CacheProvider, Etherscan, QuickNode, Tenderly } from "../src/providers";
 import { Analyzer, Scope, TraceNotFoundError, type AnalysisResult } from "../src/core";
 import type { Hex } from "../src/utils";
 
@@ -128,12 +128,16 @@ async function evaluate(
 		earlyExit: options.earlyExit ?? false,
 		printReentrancyDetails: options.printReentrancyDetails ?? type === "fp"
 	};
-	const database = Database.default;
-	const txRepo = await database.getRepository(Transaction);
-	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum, opts.database ? database : undefined);
+	const database = opts.database ? Database.default : undefined;
+	const txRepo = await database?.getRepository(Transaction);
+	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum, database);
 	const provider = quickNodeApiKey
-		? new QuickNode(quickNodeApiKey, undefined, opts.database ? database : undefined)
-		: new Tenderly(tenderlyNodeAccessKeys, undefined, opts.database ? database : undefined);
+		? new QuickNode(quickNodeApiKey, undefined, database)
+		: tenderlyNodeAccessKeys
+			? new Tenderly(tenderlyNodeAccessKeys, undefined, database)
+			: database ? new CacheProvider(database) : undefined;
+	if (!provider)
+		throw new Error("At least one provider (QuickNode, Tenderly) or database must be available");
 
 	const stats = {
 		detected: 0,
@@ -258,7 +262,7 @@ async function evaluate(
 		const tags = txn.tags ?? 0;
 		txn.setTags(Transaction.Tags.Reentrancy, result !== undefined);
 		if (txn.tags !== tags) {
-			await txRepo.update(txn.hash, { tags: txn.tags })
+			await txRepo?.update(txn.hash, { tags: txn.tags })
 				.catch(err => {
 					log(chalk.red`Failed to update tags for ${hash}`, index);
 					console.log(err);

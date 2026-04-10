@@ -2,7 +2,7 @@ import inspector from "node:inspector";
 import { Chain, type ChainName } from "../src/config/Chain";
 import { etherscanApiKeys, quickNodeApiKey, tenderlyNodeAccessKeys } from "../src/config/credentials";
 import { Database, ReentrancyAttack } from "../src/database";
-import { Etherscan, QuickNode, Tenderly, type DebugTraceProvider } from "../src/providers";
+import { Etherscan, QuickNode, Tenderly } from "../src/providers";
 import { Analyzer, Scope } from "../src/core";
 import type { Hex } from "../src/utils";
 
@@ -34,12 +34,13 @@ describe("Reentrancy Analyzer", () => {
 	const etherscan = new Etherscan(etherscanApiKeys, Chain.Ethereum);
 	const provider = quickNodeApiKey
 		? new QuickNode(quickNodeApiKey, "Ethereum")
-		: new Tenderly(tenderlyNodeAccessKeys, "Ethereum");
-
+		: tenderlyNodeAccessKeys ? new Tenderly(tenderlyNodeAccessKeys, "Ethereum") : undefined;
 	const etherscanWithDb = new Etherscan(etherscanApiKeys, Chain.Ethereum, Database.default);
 	const providerWithDb = quickNodeApiKey
 		? new QuickNode(quickNodeApiKey, "Ethereum", Database.default)
-		: new Tenderly(tenderlyNodeAccessKeys, "Ethereum", Database.default);
+		: tenderlyNodeAccessKeys ? new Tenderly(tenderlyNodeAccessKeys, "Ethereum", Database.default) : undefined;
+	if (!provider || !providerWithDb)
+		throw new Error("At least one provider (QuickNode, Tenderly) must be available");
 
 	const testOnCase = (testCase: Readonly<TestCase>) => async () => {
 		const { chain, txHash } = testCase;

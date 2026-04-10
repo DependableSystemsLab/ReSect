@@ -82,4 +82,5 @@ const tenderlyKeys = Object.keys(process.env)
 		return [chain, value] as const;
 	});
 
-export const tenderlyNodeAccessKeys: Tenderly.ApiKeys = Object.freeze(Object.fromEntries(tenderlyKeys));
+export const tenderlyNodeAccessKeys: Tenderly.ApiKeys | undefined
+	= tenderlyKeys.length ? Object.freeze(Object.fromEntries(tenderlyKeys)) : undefined;

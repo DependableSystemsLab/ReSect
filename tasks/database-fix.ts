@@ -98,7 +98,11 @@ async function fetchContracts() {
 
 	const etherscan = new Etherscan(etherscanApiKeys);
 	const rpcProvider: RPC.MultiChainProvider = quickNodeApiKey ? new QuickNode(quickNodeApiKey) : etherscan;
-	const debugProvider = quickNodeApiKey ? new QuickNode(quickNodeApiKey) : new Tenderly(tenderlyNodeAccessKeys);
+	const debugProvider = quickNodeApiKey
+		? new QuickNode(quickNodeApiKey)
+		: tenderlyNodeAccessKeys ? new Tenderly(tenderlyNodeAccessKeys) : undefined;
+	if (!debugProvider)
+		throw new Error("Debug provider is required");
 	const errors = [];
 	for (const [chainId, contracts] of contractsByChain) {
 		console.log(`Found ${contracts.length} NULL or empty contracts for chain ${chainId}`);
