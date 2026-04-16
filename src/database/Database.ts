@@ -1,30 +1,52 @@
-import { Promisable, type Arrayable, type SetRequired } from "type-fest";
-import { DataSource, In, IsNull, Not, Raw, type DataSourceOptions, type EntityTarget, type ObjectLiteral } from "typeorm";
-import { Block, CallTrace, Chain, Contract, Transaction } from "./entities";
-import { QueryProfiler } from "./QueryProfiler";
+import { type Arrayable, type SetRequired } from "type-fest";
+import { DataSource, In, IsNull, Not, Raw, type DataSourceOptions, type EntityManager, type EntityTarget, type ObjectLiteral } from "typeorm";
 import { typeormConfig } from "../config/typeorm";
 import { EtherscanConverter, JsonRpcConverter, TraceConverter } from "../converters";
 import type { Etherscan, RPC } from "../providers";
 import { Hex } from "../utils";
+import { Block, CallTrace, Chain, Contract, Transaction } from "./entities";
+import { QueryProfiler } from "./QueryProfiler";
 
 
 export class Database {
 	static #default: Database | undefined;
 
-	static get default() {
-		this.#default ??= new Database(typeormConfig);
-		return this.#default;
-	}
-
 	static readonly queryProfiler = new QueryProfiler();
 
-	#source: Promisable<DataSource>;
+	#promise?: Promise<void>;
 
-	constructor(options: DataSourceOptions) {
-		this.#source = new DataSource(options).initialize().then(ds => {
-			ds.subscribers.push(Database.queryProfiler);
-			return ds;
-		});
+	#source?: DataSource;
+
+	readonly #manager?: EntityManager;
+
+	constructor(options: DataSourceOptions);
+	constructor(source: DataSource, manager?: EntityManager);
+	constructor(param1: DataSourceOptions | DataSource, param2?: EntityManager) {
+		const source = param1 instanceof DataSource ? param1 : new DataSource(param1);
+		this.#manager = param2;
+		if (source.isInitialized)
+			this.#source = source;
+		else {
+			this.#promise = source.initialize().then(ds => {
+				if (!ds.subscribers.includes(Database.queryProfiler))
+					ds.subscribers.push(Database.queryProfiler);
+				this.#source = ds;
+			});
+		}
+	}
+
+	static get default() {
+		return this.#default ??= new Database(typeormConfig);
+	}
+
+	get source(): DataSource {
+		if (!this.#source?.isInitialized)
+			throw new Error("Database not initialized");
+		return this.#source;
+	}
+
+	get manager(): EntityManager {
+		return this.#manager ?? this.source.manager;
 	}
 
 	#verifyPrimaryKey<Entity extends ObjectLiteral>(
@@ -58,18 +80,22 @@ export class Database {
 		entities: Entity[],
 		batchSize: number = 64
 	): Promise<Entity[]> {
-		const source = await this.#source;
-		const savedSlices = await source.manager.transaction(manager => {
-			const repo = manager.getRepository(entity);
+		await this.ensureInitialized();
+		const savedSlices = await this.manager.transaction(m => {
+			const repo = m.getRepository(entity);
 			return repo.save(entities, { chunk: batchSize });
 		});
 		return savedSlices.flat();
 	}
 
+	async ensureInitialized() {
+		if (this.#promise)
+			await this.#promise;
+	}
+
 	async close() {
-		const source = await this.#source;
-		if (source.isInitialized)
-			await source.destroy();
+		if (this.#source?.isInitialized)
+			await this.#source.destroy();
 	}
 
 	async has(entity: EntityTarget<Block>, id: Pick<Block, "chainId" | "number">): Promise<boolean>;
@@ -79,24 +105,22 @@ export class Database {
 	async has<Entity extends ObjectLiteral>(entity: EntityTarget<Entity>, id: number | string): Promise<boolean>;
 	async has<Entity extends ObjectLiteral>(entity: EntityTarget<Entity>, id: Partial<Entity>): Promise<boolean>;
 	async has<Entity extends ObjectLiteral>(entity: EntityTarget<Entity>, id: number | string | Partial<Entity>): Promise<boolean> {
-		const src = await this.#source;
-		const metadata = src.getMetadata(entity);
+		await this.ensureInitialized();
+		const metadata = this.source.getMetadata(entity);
 		const pks = metadata.primaryColumns.map(col => [col.propertyName, col.databaseName] as const);
 		const params = this.#verifyPrimaryKey(id, pks, metadata.name);
 		const filter = Object.keys(params).map(k => `"${k}" = :${k}`).join(" AND ");
-		return src.createQueryBuilder(entity, metadata.name)
+		const result = await this.source.createQueryBuilder(entity, metadata.name)
 			.select(`"${pks[0][0]}"`)
 			.where(filter, params)
 			.limit(1)
-			.getRawOne()
-			.then(result => result != null);
+			.getRawOne();
+		return result != null;
 	}
 
 	async getRepository<T extends ObjectLiteral>(entity: EntityTarget<T>) {
-		const source = this.#source instanceof DataSource ? this.#source : await this.#source;
-		if (!source.isInitialized)
-			throw new Error("Database not initialized");
-		return source.manager.getRepository(entity);
+		await this.ensureInitialized();
+		return this.manager.getRepository(entity);
 	}
 
 	async getCode(address: Hex.String): Promise<Hex.String | null> {
@@ -193,8 +217,8 @@ export class Database {
 	async getAttackTransactions(attackIds?: Arrayable<number>, tags?: Transaction.Tags): Promise<Transaction.WithAttack[]> {
 		if (typeof attackIds === "number")
 			attackIds = [attackIds];
-		const manager = (await this.#source).manager;
-		let txns = await manager.find(Transaction, {
+		const repo = await this.getRepository(Transaction);
+		let txns = await repo.find({
 			where: {
 				attackId: attackIds?.length ? In(attackIds) : Not(IsNull()),
 			},
