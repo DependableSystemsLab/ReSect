@@ -127,4 +127,4 @@ test/              # Integration tests against real transactions
 
 ## License
 
-This project is licensed under the [LGPL-3.0-only License](https://www.gnu.org/licenses/lgpl-3.0.html).
+This project is licensed under the [Apache 2.0 License](https://www.apache.org/licenses/LICENSE-2.0).
